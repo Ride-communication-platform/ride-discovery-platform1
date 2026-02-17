@@ -6,10 +6,10 @@ This project is a web based ride marketplace platform where drivers publish ride
 
 TEAM MEMBERS
 
-Backend Team
-1.Srija Chowdary Chava
-2.Sai Krishna Reddy Kethireddy
-
 Frontend Team
 1.Manikanta Srinivas Penumarthi
 2.Avighna Yarlagadda
+
+Backend Team
+1.Srija Chowdary Chava
+2.Sai Krishna Reddy Kethireddy
