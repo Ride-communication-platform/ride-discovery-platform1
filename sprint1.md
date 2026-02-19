@@ -102,9 +102,7 @@ This enables transparent demos and better planning for the next sprint.
 
 All planned issues for Sprint 1 were completed.
 
-Key deliverables achieved:
-
-Frontend
+Frontend Achievements
 
 Premium authentication UI
 
@@ -118,7 +116,7 @@ Secure logout flow
 
 Integration with backend APIs
 
-Backend
+Backend Achievements
 
 User registration endpoint
 
@@ -151,3 +149,14 @@ Password reset functionality
 Email verification
 
 These will be considered in future sprints.
+
+🎥 Submission Links
+📂 GitHub Repository
+
+https://github.com/Ride-communication-platform/ride-discovery-platform1/tree/main
+
+🎬 Demo Videos (Frontend + Backend)
+
+Google Drive Folder (contains both frontend and backend demo videos):
+
+https://drive.google.com/drive/folders/1JiC1odVArH3LJovh5vX7R3WvoBzQAbaq?usp=drive_link
