@@ -85,6 +85,7 @@ CREATE TABLE IF NOT EXISTS ride_requests (
 CREATE TABLE IF NOT EXISTS published_rides (
   id TEXT PRIMARY KEY,
   user_id TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'active',
   from_label TEXT NOT NULL,
   from_lat REAL NOT NULL,
   from_lon REAL NOT NULL,
@@ -120,6 +121,30 @@ CREATE TABLE IF NOT EXISTS ride_request_actions (
   FOREIGN KEY (ride_request_id) REFERENCES ride_requests(id),
   FOREIGN KEY (driver_user_id) REFERENCES users(id),
   FOREIGN KEY (published_ride_id) REFERENCES published_rides(id)
+);
+
+CREATE TABLE IF NOT EXISTS trips (
+  id TEXT PRIMARY KEY,
+  ride_request_id TEXT NOT NULL UNIQUE,
+  rider_user_id TEXT NOT NULL,
+  driver_user_id TEXT NOT NULL,
+  published_ride_id TEXT NOT NULL DEFAULT '',
+  status TEXT NOT NULL DEFAULT 'confirmed',
+  created_at TIMESTAMP NOT NULL,
+  FOREIGN KEY (ride_request_id) REFERENCES ride_requests(id),
+  FOREIGN KEY (rider_user_id) REFERENCES users(id),
+  FOREIGN KEY (driver_user_id) REFERENCES users(id),
+  FOREIGN KEY (published_ride_id) REFERENCES published_rides(id)
+);
+
+CREATE TABLE IF NOT EXISTS notifications (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  title TEXT NOT NULL,
+  body TEXT NOT NULL DEFAULT '',
+  read INTEGER NOT NULL DEFAULT 0,
+  created_at TIMESTAMP NOT NULL,
+  FOREIGN KEY (user_id) REFERENCES users(id)
 );`
 
 	if _, err := db.Exec(strings.TrimSpace(migration)); err != nil {
@@ -161,6 +186,7 @@ CREATE TABLE IF NOT EXISTS ride_request_actions (
 	}
 
 	for _, statement := range []string{
+		`ALTER TABLE published_rides ADD COLUMN status TEXT NOT NULL DEFAULT 'active';`,
 		`ALTER TABLE published_rides ADD COLUMN vehicle_info TEXT NOT NULL DEFAULT '';`,
 		`ALTER TABLE published_rides ADD COLUMN notes TEXT NOT NULL DEFAULT '';`,
 		`ALTER TABLE published_rides ADD COLUMN route_miles INTEGER NOT NULL DEFAULT 0;`,
