@@ -86,6 +86,33 @@ body {
   gap: 10px;
 }
 
+/* Logo home link: not a button — looks like static branding (FAANG-style). */
+.auth-brand-home,
+.profile-brand-home {
+  text-decoration: none;
+  color: inherit;
+  cursor: pointer;
+  border: none;
+  background: transparent;
+  padding: 0;
+  margin: 0;
+  font: inherit;
+  -webkit-appearance: none;
+  appearance: none;
+  box-shadow: none;
+}
+
+.auth-brand-home:focus-visible,
+.profile-brand-home:focus-visible {
+  outline: 2px solid var(--orange);
+  outline-offset: 3px;
+  border-radius: 6px;
+}
+
+.auth-brand-home .logo {
+  display: block;
+}
+
 .auth-brand-mark {
   width: 40px;
   height: 40px;
