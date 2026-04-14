@@ -41,6 +41,12 @@ type rideRequestActionPayload struct {
 	PublishedRideID string `json:"publishedRideId"`
 }
 
+type publishedRideActionPayload struct {
+	Action     string `json:"action"`
+	Message    string `json:"message"`
+	Passengers int    `json:"passengers"`
+}
+
 func (h *AuthHandler) PublishedRides(w http.ResponseWriter, r *http.Request) {
 	userID, _ := r.Context().Value(middleware.UserIDContextKey).(string)
 	if userID == "" {
@@ -151,6 +157,131 @@ func (h *AuthHandler) createPublishedRide(w http.ResponseWriter, r *http.Request
 	})
 }
 
+func (h *AuthHandler) PublishedRideByID(w http.ResponseWriter, r *http.Request) {
+	if strings.HasSuffix(r.URL.Path, "/respond") {
+		h.PublishedRideRespond(w, r)
+		return
+	}
+
+	writeError(w, http.StatusNotFound, "Not found")
+}
+
+func (h *AuthHandler) PublishedRideRespond(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeError(w, http.StatusMethodNotAllowed, "Method not allowed")
+		return
+	}
+
+	userID, _ := r.Context().Value(middleware.UserIDContextKey).(string)
+	if userID == "" {
+		writeError(w, http.StatusUnauthorized, "Invalid token")
+		return
+	}
+
+	rideID := strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, "/api/published-rides/"), "/respond")
+	rideID = strings.Trim(rideID, "/")
+	if rideID == "" {
+		writeError(w, http.StatusBadRequest, "Published ride ID is required")
+		return
+	}
+
+	var payload publishedRideActionPayload
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		writeError(w, http.StatusBadRequest, "Invalid JSON payload")
+		return
+	}
+
+	payload.Action = strings.TrimSpace(strings.ToLower(payload.Action))
+	payload.Message = strings.TrimSpace(payload.Message)
+	if payload.Passengers <= 0 {
+		payload.Passengers = 1
+	}
+
+	if payload.Action != "accept" && payload.Action != "negotiate" {
+		writeError(w, http.StatusBadRequest, "Action must be accept or negotiate")
+		return
+	}
+	if len([]rune(payload.Message)) > 220 {
+		writeError(w, http.StatusBadRequest, "Message should be under 220 characters")
+		return
+	}
+
+	ride, err := h.store.GetPublishedRideByID(r.Context(), rideID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			writeError(w, http.StatusNotFound, "Published ride not found")
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "Could not get published ride")
+		return
+	}
+	if ride.UserID == userID {
+		writeError(w, http.StatusBadRequest, "You cannot respond to your own published ride")
+		return
+	}
+
+	// Create a rider-side ride request record so the confirmed trip can reference a ride_request_id.
+	request, err := h.store.CreateRideRequest(r.Context(), models.RideRequest{
+		UserID:            userID,
+		FromLabel:         ride.FromLabel,
+		FromLat:           ride.FromLat,
+		FromLon:           ride.FromLon,
+		ToLabel:           ride.ToLabel,
+		ToLat:             ride.ToLat,
+		ToLon:             ride.ToLon,
+		RideDate:          ride.RideDate,
+		RideTime:          ride.RideTime,
+		Flexibility:       ride.Flexibility,
+		Passengers:        payload.Passengers,
+		Luggage:           ride.LuggageAllowed,
+		MaxBudget:         ride.PricePerSeat * float64(payload.Passengers),
+		RideType:          ride.RideType,
+		VehiclePreference: ride.VehicleType,
+		Notes:             payload.Message,
+		RouteMiles:        ride.RouteMiles,
+		RouteDuration:     ride.RouteDuration,
+		PriceEstimate:     "",
+	})
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "Could not create rider request")
+		return
+	}
+
+	var trip *models.Trip
+	if payload.Action == "accept" {
+		createdTrip, err := h.store.CreateConfirmedTrip(r.Context(), request.ID, userID, ride.UserID, ride.ID)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "Could not confirm trip")
+			return
+		}
+		trip = createdTrip
+
+		// Hide this ride from everyone else while confirmed.
+		_ = h.store.SetPublishedRideStatus(r.Context(), ride.ID, ride.UserID, "inactive")
+	}
+
+	// Notifications for both parties.
+	if payload.Action == "accept" {
+		_, _ = h.store.CreateNotification(r.Context(), userID, "Ride confirmed", "You confirmed a ride. Check Upcoming trip for details.")
+		_, _ = h.store.CreateNotification(r.Context(), ride.UserID, "New rider confirmed", "A rider accepted your published ride. Check Upcoming trip for details.")
+	} else {
+		_, _ = h.store.CreateNotification(r.Context(), userID, "Negotiation sent", "You sent a negotiation message to the driver.")
+		_, _ = h.store.CreateNotification(r.Context(), ride.UserID, "New negotiation", "A rider sent a negotiation message for your published ride.")
+	}
+
+	message := "Request marked for follow-up."
+	if payload.Action == "accept" {
+		message = "Ride accepted."
+	} else if payload.Action == "negotiate" {
+		message = "Negotiation started."
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"message": message,
+		"trip":    trip,
+	})
+}
+
 func (h *AuthHandler) RideRequestFeed(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		writeError(w, http.StatusMethodNotAllowed, "Method not allowed")
@@ -179,6 +310,41 @@ func (h *AuthHandler) RideRequestFeed(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, map[string]any{"requests": feed})
+}
+
+func (h *AuthHandler) PublishedRideFeed(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeError(w, http.StatusMethodNotAllowed, "Method not allowed")
+		return
+	}
+
+	userID, _ := r.Context().Value(middleware.UserIDContextKey).(string)
+	if userID == "" {
+		writeError(w, http.StatusUnauthorized, "Invalid token")
+		return
+	}
+
+	seats, _ := strconv.Atoi(strings.TrimSpace(r.URL.Query().Get("seats")))
+	maxPrice, _ := strconv.ParseFloat(strings.TrimSpace(r.URL.Query().Get("maxPrice")), 64)
+
+	feed, err := h.store.ListPublishedRideFeed(
+		r.Context(),
+		userID,
+		r.URL.Query().Get("date"),
+		r.URL.Query().Get("route"),
+		r.URL.Query().Get("rideType"),
+		r.URL.Query().Get("vehicleType"),
+		r.URL.Query().Get("luggageAllowed"),
+		r.URL.Query().Get("flexibility"),
+		seats,
+		maxPrice,
+	)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "Could not get published rides feed")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{"rides": feed})
 }
 
 func (h *AuthHandler) RideRequestRespond(w http.ResponseWriter, r *http.Request) {
@@ -261,6 +427,16 @@ func (h *AuthHandler) RideRequestRespond(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
+	var trip *models.Trip
+	if payload.Action == "accept" {
+		createdTrip, err := h.store.CreateConfirmedTrip(r.Context(), requestID, request.UserID, userID, payload.PublishedRideID)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "Could not confirm trip")
+			return
+		}
+		trip = createdTrip
+	}
+
 	message := "Request marked for follow-up."
 	if payload.Action == "accept" {
 		message = "Ride request accepted."
@@ -271,5 +447,6 @@ func (h *AuthHandler) RideRequestRespond(w http.ResponseWriter, r *http.Request)
 	writeJSON(w, http.StatusOK, map[string]any{
 		"message": message,
 		"action":  action,
+		"trip":    trip,
 	})
 }
