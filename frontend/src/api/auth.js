@@ -146,6 +146,20 @@ export function listPublishedRides(token) {
   })
 }
 
+export function listPublishedRideFeed(token, filters = {}) {
+  const params = new URLSearchParams()
+  Object.entries(filters).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && value !== '') params.set(key, String(value))
+  })
+  const suffix = params.toString() ? `?${params.toString()}` : ''
+  return request(`/api/published-rides/feed${suffix}`, {
+    method: 'GET',
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  })
+}
+
 export function listRideRequestFeed(token, filters = {}) {
   const params = new URLSearchParams()
   Object.entries(filters).forEach(([key, value]) => {
@@ -167,6 +181,43 @@ export function respondToRideRequest(token, requestID, input) {
       Authorization: `Bearer ${token}`,
     },
     body: JSON.stringify(input),
+  })
+}
+
+export function respondToPublishedRide(token, rideID, input) {
+  return request(`/api/published-rides/${rideID}/respond`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(input),
+  })
+}
+
+export function listTrips(token) {
+  return request('/api/trips', {
+    method: 'GET',
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  })
+}
+
+export function cancelTrip(token, tripID) {
+  return request(`/api/trips/${tripID}/cancel`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  })
+}
+
+export function listNotifications(token) {
+  return request('/api/notifications', {
+    method: 'GET',
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
   })
 }
 
