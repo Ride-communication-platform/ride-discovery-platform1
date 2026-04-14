@@ -79,8 +79,13 @@ func main() {
 	mux.Handle("/api/users/", middleware.AuthMiddleware(jwtManager)(http.HandlerFunc(authHandler.PublicProfile)))
 	mux.Handle("/api/ride-requests", middleware.AuthMiddleware(jwtManager)(http.HandlerFunc(authHandler.RideRequests)))
 	mux.Handle("/api/ride-requests/feed", middleware.AuthMiddleware(jwtManager)(http.HandlerFunc(authHandler.RideRequestFeed)))
+	mux.Handle("/api/published-rides/feed", middleware.AuthMiddleware(jwtManager)(http.HandlerFunc(authHandler.PublishedRideFeed)))
 	mux.Handle("/api/published-rides", middleware.AuthMiddleware(jwtManager)(http.HandlerFunc(authHandler.PublishedRides)))
+	mux.Handle("/api/published-rides/", middleware.AuthMiddleware(jwtManager)(http.HandlerFunc(authHandler.PublishedRideByID)))
 	mux.Handle("/api/ride-requests/", middleware.AuthMiddleware(jwtManager)(http.HandlerFunc(authHandler.RideRequestByID)))
+	mux.Handle("/api/trips", middleware.AuthMiddleware(jwtManager)(http.HandlerFunc(authHandler.Trips)))
+	mux.Handle("/api/trips/", middleware.AuthMiddleware(jwtManager)(http.HandlerFunc(authHandler.Trips)))
+	mux.Handle("/api/notifications", middleware.AuthMiddleware(jwtManager)(http.HandlerFunc(authHandler.Notifications)))
 
 	server := &http.Server{
 		Addr:         ":" + port,
