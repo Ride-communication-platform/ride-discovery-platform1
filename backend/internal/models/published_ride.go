@@ -5,6 +5,7 @@ import "time"
 type PublishedRide struct {
 	ID               string    `json:"id"`
 	UserID           string    `json:"userId"`
+	Status           string    `json:"status"`
 	FromLabel        string    `json:"fromLabel"`
 	FromLat          float64   `json:"fromLat"`
 	FromLon          float64   `json:"fromLon"`
@@ -26,6 +27,13 @@ type PublishedRide struct {
 	RouteDuration    string    `json:"routeDuration"`
 	EarningsEstimate float64   `json:"earningsEstimate"`
 	CreatedAt        time.Time `json:"createdAt"`
+}
+
+type PublishedRideFeedItem struct {
+	PublishedRide
+	DriverName        string  `json:"driverName"`
+	DriverRating      float64 `json:"driverRating"`
+	DriverRatingCount int     `json:"driverRatingCount"`
 }
 
 type RideRequestFeedItem struct {
