@@ -221,3 +221,76 @@ func TestPublishedRideRespond_AcceptCreatesTripAndNotifications(t *testing.T) {
 	}
 }
 
+func TestCancelTrip_ReactivatesPublishedRide(t *testing.T) {
+	st := newTestStore(t)
+
+	driver, err := st.CreateOAuthUser(context.Background(), "Driver", "driver4@example.com", "google")
+	if err != nil {
+		t.Fatalf("create driver: %v", err)
+	}
+	rider, err := st.CreateOAuthUser(context.Background(), "Rider", "rider4@example.com", "google")
+	if err != nil {
+		t.Fatalf("create rider: %v", err)
+	}
+
+	ride, err := st.CreatePublishedRide(context.Background(), models.PublishedRide{
+		UserID:         driver.ID,
+		FromLabel:      "Miami",
+		FromLat:        25.7617,
+		FromLon:        -80.1918,
+		ToLabel:        "Orlando",
+		ToLat:          28.5383,
+		ToLon:          -81.3792,
+		RideDate:       "2026-04-15",
+		RideTime:       "07:30",
+		Flexibility:    "exact",
+		AvailableSeats: 3,
+		TotalSeats:     3,
+		PricePerSeat:   25,
+		VehicleType:    "sedan",
+		LuggageAllowed: "small",
+		RideType:       "shared",
+		RouteMiles:     234,
+		RouteDuration:  "4h 24m",
+	})
+	if err != nil {
+		t.Fatalf("create published ride: %v", err)
+	}
+
+	// Accept published ride => trip confirmed and ride set inactive.
+	h := &AuthHandler{store: st}
+	payload := map[string]any{"action": "accept", "message": "Ready", "passengers": 1}
+	body, _ := json.Marshal(payload)
+	req := httptest.NewRequest(http.MethodPost, "/api/published-rides/"+ride.ID+"/respond", bytes.NewReader(body))
+	req = req.WithContext(context.WithValue(req.Context(), middleware.UserIDContextKey, rider.ID))
+	rec := httptest.NewRecorder()
+	h.PublishedRideRespond(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("accept status=%d body=%s", rec.Code, rec.Body.String())
+	}
+
+	// Find trip ID.
+	trips, err := st.ListTripsByUser(context.Background(), rider.ID)
+	if err != nil || len(trips) != 1 {
+		t.Fatalf("expected 1 trip, got %d (err=%v)", len(trips), err)
+	}
+	tripID := trips[0].ID
+
+	// Cancel trip should re-activate ride.
+	cancelReq := httptest.NewRequest(http.MethodPost, "/api/trips/"+tripID+"/cancel", nil)
+	cancelReq = cancelReq.WithContext(context.WithValue(cancelReq.Context(), middleware.UserIDContextKey, rider.ID))
+	cancelRec := httptest.NewRecorder()
+	h.CancelTrip(cancelRec, cancelReq)
+	if cancelRec.Code != http.StatusOK {
+		t.Fatalf("cancel status=%d body=%s", cancelRec.Code, cancelRec.Body.String())
+	}
+
+	updated, err := st.GetPublishedRideByID(context.Background(), ride.ID)
+	if err != nil {
+		t.Fatalf("get updated ride: %v", err)
+	}
+	if updated.Status != "active" {
+		t.Fatalf("expected ride status active, got %s", updated.Status)
+	}
+}
+
