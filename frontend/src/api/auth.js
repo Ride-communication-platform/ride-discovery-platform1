@@ -221,4 +221,32 @@ export function listNotifications(token) {
   })
 }
 
+export function listChats(token) {
+  return request('/api/chats', {
+    method: 'GET',
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  })
+}
+
+export function listChatMessages(token, chatID) {
+  return request(`/api/chats/${chatID}/messages`, {
+    method: 'GET',
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  })
+}
+
+export function sendChatMessage(token, chatID, input) {
+  return request(`/api/chats/${chatID}/messages`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(input),
+  })
+}
+
 export { API_BASE_URL }
