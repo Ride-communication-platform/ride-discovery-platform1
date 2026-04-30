@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { MapContainer, Marker, Polyline, TileLayer } from 'react-leaflet'
+import { CircleMarker, MapContainer, Marker, Polyline, TileLayer } from 'react-leaflet'
 import { divIcon } from 'leaflet'
-import { createPublishedRide, createRideRequest, deleteRideRequest, forgotPassword, getPublicUserProfile, listPublishedRides, listRideRequestFeed, listRideRequests, login, me, resendVerification, resetPassword, respondToRideRequest, signup, updateProfile, updateRideRequest, verifyEmail } from './api/auth'
+import { cancelTrip, createPublishedRide, createRideRequest, deleteRideRequest, forgotPassword, getPublicUserProfile, listChatMessages, listChats, listNotifications, listPublishedRideFeed, listPublishedRides, listRideRequestFeed, listRideRequests, listTrips, login, me, resendVerification, resetPassword, respondToPublishedRide, respondToRideRequest, sendChatMessage, signup, updateProfile, updateRideRequest, verifyEmail } from './api/auth'
 import { DotLottieReact } from '@lottiefiles/dotlottie-react'
 import 'leaflet/dist/leaflet.css'
 
@@ -175,6 +175,18 @@ function buildRoutePath(coordinates, width = 360, height = 148) {
     .join(' ')
 }
 
+function formatChatTimestamp(value) {
+  if (!value) return ''
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return ''
+  return date.toLocaleString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  })
+}
+
 async function fetchLocationSuggestions(query, signal) {
   const params = new URLSearchParams({
     q: query,
@@ -203,7 +215,16 @@ async function fetchRouteData(fromLocation, toLocation, rideType, signal) {
     `${OSRM_URL}/${fromLocation.lon},${fromLocation.lat};${toLocation.lon},${toLocation.lat}?overview=full&geometries=geojson`,
     { signal, headers: { Accept: 'application/json' } },
   )
-  if (!response.ok) throw new Error('Could not load route preview')
+  if (!response.ok) {
+    let detail = ''
+    try {
+      const text = await response.text()
+      detail = text ? ` (${text.slice(0, 140)})` : ''
+    } catch {
+      detail = ''
+    }
+    throw new Error(`Could not load route preview${detail}`)
+  }
   const data = await response.json()
   const route = data.routes?.[0]
   if (!route) throw new Error('No route found for this trip')
@@ -255,6 +276,19 @@ function App() {
   const [routePreview, setRoutePreview] = useState({ loading: false, error: '', data: null })
   const [rideRequests, setRideRequests] = useState([])
   const [publishedRides, setPublishedRides] = useState([])
+  const [trips, setTrips] = useState([])
+  const [notifications, setNotifications] = useState([])
+  const [chats, setChats] = useState([])
+  const [activeChatId, setActiveChatId] = useState('')
+  const [chatMessages, setChatMessages] = useState([])
+  const [chatLoading, setChatLoading] = useState(false)
+  const [chatMessagesLoading, setChatMessagesLoading] = useState(false)
+  const [chatSending, setChatSending] = useState(false)
+  const [chatDraft, setChatDraft] = useState('')
+  const [chatNotice, setChatNotice] = useState('')
+  const [chatImageDraft, setChatImageDraft] = useState('')
+  const [chatImageName, setChatImageName] = useState('')
+  const [chatLocationLoading, setChatLocationLoading] = useState(false)
   const [publishMode, setPublishMode] = useState('create')
   const [publishForm, setPublishForm] = useState(emptyPublishRide)
   const [publishErrors, setPublishErrors] = useState({})
@@ -279,7 +313,12 @@ function App() {
   const [cancelRequestLoading, setCancelRequestLoading] = useState('')
   const [editRequestLoading, setEditRequestLoading] = useState('')
   const [homeNotice, setHomeNotice] = useState('')
+  const [publishedRideFeed, setPublishedRideFeed] = useState([])
+  const [publishedRideFeedFilters, setPublishedRideFeedFilters] = useState({ date: '', route: '', seats: '', maxPrice: '', rideType: '', vehicleType: '', luggageAllowed: '', flexibility: '' })
+  const [publishedRideFeedLoading, setPublishedRideFeedLoading] = useState(false)
+  const [publishedRideFeedNotice, setPublishedRideFeedNotice] = useState('')
   const dragStateRef = useRef(null)
+  const chatImageInputRef = useRef(null)
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
@@ -320,6 +359,8 @@ function App() {
   const publishRouteSummary = publishRoutePreview.data
   const publishFromSuggestions = publishSuggestions.from
   const publishToSuggestions = publishSuggestions.to
+  const upcomingTrip = useMemo(() => trips.find((trip) => trip.status === 'confirmed') || null, [trips])
+  const activeChat = useMemo(() => chats.find((conversation) => conversation.id === activeChatId) || null, [chats, activeChatId])
   const estimatedEarnings = useMemo(() => {
     const seats = Number(publishForm.availableSeats || 0)
     const price = Number(publishForm.pricePerSeat || 0)
@@ -341,18 +382,57 @@ function App() {
     if (!user) {
       setRideRequests([])
       setPublishedRides([])
+      setTrips([])
+      setNotifications([])
+      setChats([])
+      setActiveChatId('')
+      setChatMessages([])
+      setChatNotice('')
       setHomeNotice('')
       return
     }
     const token = localStorage.getItem(TOKEN_KEY)
     if (!token) return
+    setChatLoading(true)
     listRideRequests(token)
       .then((res) => setRideRequests(res.requests || []))
       .catch(() => {})
     listPublishedRides(token)
       .then((res) => setPublishedRides(res.rides || []))
       .catch(() => {})
+    listTrips(token)
+      .then((res) => setTrips(res.trips || []))
+      .catch(() => {})
+    listNotifications(token)
+      .then((res) => setNotifications(res.notifications || []))
+      .catch(() => {})
+    listChats(token)
+      .then((res) => setChats(res.conversations || []))
+      .catch(() => {})
+      .finally(() => setChatLoading(false))
   }, [user])
+
+  useEffect(() => {
+    if (!chats.length) {
+      setActiveChatId('')
+      setChatMessages([])
+      return
+    }
+    if (!activeChatId || !chats.some((conversation) => conversation.id === activeChatId)) {
+      setActiveChatId(chats[0].id)
+    }
+  }, [chats, activeChatId])
+
+  useEffect(() => {
+    const token = localStorage.getItem(TOKEN_KEY)
+    if (!user || !token || !activeChatId) return
+    setChatMessagesLoading(true)
+    setChatNotice('')
+    listChatMessages(token, activeChatId)
+      .then((res) => setChatMessages(res.messages || []))
+      .catch((error) => setChatNotice(error.message))
+      .finally(() => setChatMessagesLoading(false))
+  }, [user, activeChatId])
 
   const handleCancelRideRequest = async (requestID) => {
     const token = localStorage.getItem(TOKEN_KEY)
@@ -395,6 +475,21 @@ function App() {
       .catch((error) => setRideFeedNotice(error.message))
       .finally(() => setRideFeedLoading(false))
   }, [user, rideFeedFilters])
+
+  useEffect(() => {
+    const token = localStorage.getItem(TOKEN_KEY)
+    if (!user || !token) return
+    if (activeView !== 'find') return
+    setPublishedRideFeedLoading(true)
+    setPublishedRideFeedNotice('')
+    listPublishedRideFeed(token, publishedRideFeedFilters)
+      .then((res) => {
+        const rides = Array.isArray(res.rides) ? res.rides : []
+        setPublishedRideFeed(rides.filter((ride) => ride.userId !== user.id))
+      })
+      .catch((error) => setPublishedRideFeedNotice(error.message))
+      .finally(() => setPublishedRideFeedLoading(false))
+  }, [user, activeView, publishedRideFeedFilters])
 
   const switchTab = (tab) => {
     setErrors({})
@@ -620,7 +715,7 @@ function App() {
     const name = profileForm.name.trim()
 
     if (!name) {
-      setProfileNotice('Name is required.')
+      setProfileNotice('Name is required. Update your name here to remove any placeholder/demo name.')
       return
     }
     if (!token) {
@@ -928,7 +1023,9 @@ function App() {
     if (requestForm.from.trim() && requestForm.to.trim() && normalizeLocation(requestForm.from) === normalizeLocation(requestForm.to)) {
       next.to = 'Destination must be different from pickup'
     }
-    if (!requestForm.date) next.date = 'Date is required'
+    if (!requestForm.date) {
+      next.date = 'Date is required'
+    }
     if (!requestForm.time) next.time = 'Time is required'
     if (requestForm.maxBudget && Number(requestForm.maxBudget) <= 0) next.maxBudget = 'Budget must be greater than 0'
     if (requestForm.notes.length > 220) next.notes = 'Notes should be under 220 characters'
@@ -1000,7 +1097,9 @@ function App() {
     const next = {}
     if (!publishForm.from.trim()) next.from = 'Pickup location is required'
     if (!publishForm.to.trim()) next.to = 'Drop-off location is required'
-    if (!publishForm.date) next.date = 'Date is required'
+    if (!publishForm.date) {
+      next.date = 'Date is required'
+    }
     if (!publishForm.time) next.time = 'Time is required'
     if (!publishForm.pricePerSeat || Number(publishForm.pricePerSeat) <= 0) next.pricePerSeat = 'Price per seat must be greater than 0'
     if (publishForm.availableSeats < 1) next.availableSeats = 'Available seats must be at least 1'
@@ -1081,11 +1180,200 @@ function App() {
         message: action === 'accept' ? 'Driver is ready to confirm this route.' : 'Driver wants to discuss pricing and pickup details.',
       })
       setRideFeedNotice(res.message)
+      if (action === 'accept') {
+        setRideRequestFeed((prev) => prev.filter((request) => request.id !== requestID))
+      }
+      const [tripRes, noteRes, chatRes] = await Promise.all([listTrips(token), listNotifications(token), listChats(token)])
+      setTrips(tripRes.trips || [])
+      setNotifications(noteRes.notifications || [])
+      setChats(chatRes.conversations || [])
     } catch (error) {
       setRideFeedNotice(error.message)
     } finally {
       setRequestActionLoading('')
     }
+  }
+
+  const handlePublishedRideAction = async (rideID, action) => {
+    const token = localStorage.getItem(TOKEN_KEY)
+    if (!token) {
+      handleLogout()
+      return
+    }
+    setRequestActionLoading(`${rideID}:${action}`)
+    setPublishedRideFeedNotice('')
+    try {
+      const res = await respondToPublishedRide(token, rideID, {
+        action,
+        passengers: Number(publishedRideFeedFilters.seats || 1),
+        message: action === 'accept' ? 'Rider is ready to confirm this ride.' : 'Rider wants to discuss pricing and pickup details.',
+      })
+      setPublishedRideFeedNotice(res.message)
+      if (action === 'accept') {
+        setPublishedRideFeed((prev) => prev.filter((ride) => ride.id !== rideID))
+      }
+
+      // Pull latest trips + notifications so Upcoming/Notifications update immediately.
+      const [tripRes, noteRes, chatRes] = await Promise.all([listTrips(token), listNotifications(token), listChats(token)])
+      setTrips(tripRes.trips || [])
+      setNotifications(noteRes.notifications || [])
+      setChats(chatRes.conversations || [])
+    } catch (error) {
+      setPublishedRideFeedNotice(error.message)
+    } finally {
+      setRequestActionLoading('')
+    }
+  }
+
+  const handleCancelTrip = async (tripID) => {
+    const token = localStorage.getItem(TOKEN_KEY)
+    if (!token || !tripID) return
+    setHomeNotice('')
+    try {
+      const res = await cancelTrip(token, tripID)
+      setHomeNotice(res.message)
+      const [tripRes, noteRes] = await Promise.all([listTrips(token), listNotifications(token)])
+      setTrips(tripRes.trips || [])
+      setNotifications(noteRes.notifications || [])
+      // Refresh find-a-ride feed if user is on it (cancel makes rides available again).
+      if (activeView === 'find') {
+        const feedRes = await listPublishedRideFeed(token, publishedRideFeedFilters)
+        setPublishedRideFeed((feedRes.rides || []).filter((ride) => ride.userId !== user.id))
+      }
+    } catch (e) {
+      setHomeNotice(e.message)
+    }
+  }
+
+  const handleOpenChat = (conversationID) => {
+    setActiveView('chats')
+    if (conversationID) setActiveChatId(conversationID)
+    setChatNotice('')
+  }
+
+  const handleSendChat = async (e) => {
+    e.preventDefault()
+    const token = localStorage.getItem(TOKEN_KEY)
+    if (!token) {
+      handleLogout()
+      return
+    }
+    if (!activeChatId) {
+      setChatNotice('Select a chat first.')
+      return
+    }
+    const body = chatDraft.trim()
+    if (!body && !chatImageDraft) {
+      setChatNotice('Write a message or attach an image before sending.')
+      return
+    }
+
+    setChatSending(true)
+    setChatNotice('')
+    try {
+      const payload = chatImageDraft
+        ? {
+            messageType: 'image',
+            body,
+            imageData: chatImageDraft,
+          }
+        : {
+            messageType: 'text',
+            body,
+          }
+      const res = await sendChatMessage(token, activeChatId, payload)
+      setChatMessages((prev) => [...prev, res.chatMessage])
+      setChatDraft('')
+      setChatImageDraft('')
+      setChatImageName('')
+      const [chatRes, noteRes] = await Promise.all([listChats(token), listNotifications(token)])
+      setChats(chatRes.conversations || [])
+      setNotifications(noteRes.notifications || [])
+    } catch (error) {
+      setChatNotice(error.message)
+    } finally {
+      setChatSending(false)
+    }
+  }
+
+  const handleChatImagePick = async (e) => {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+    if (!file.type.startsWith('image/')) {
+      setChatNotice('Choose an image file.')
+      return
+    }
+    if (file.size > 1_000_000) {
+      setChatNotice('Image must be smaller than 1 MB.')
+      return
+    }
+    const reader = new FileReader()
+    reader.onload = () => {
+      const result = reader.result?.toString() || ''
+      if (!result) {
+        setChatNotice('Could not read the image.')
+        return
+      }
+      setChatImageDraft(result)
+      setChatImageName(file.name)
+      setChatNotice('')
+    }
+    reader.onerror = () => setChatNotice('Could not read the image.')
+    reader.readAsDataURL(file)
+  }
+
+  const handleShareCurrentLocation = async () => {
+    if (!navigator.geolocation) {
+      setChatNotice('Location sharing is not supported in this browser.')
+      return
+    }
+    const token = localStorage.getItem(TOKEN_KEY)
+    if (!token) {
+      handleLogout()
+      return
+    }
+    if (!activeChatId) {
+      setChatNotice('Select a chat first.')
+      return
+    }
+
+    setChatLocationLoading(true)
+    setChatNotice('')
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        try {
+          const latitude = Number(position.coords.latitude.toFixed(6))
+          const longitude = Number(position.coords.longitude.toFixed(6))
+          const label = `Shared location (${latitude}, ${longitude})`
+          const res = await sendChatMessage(token, activeChatId, {
+            messageType: 'location',
+            body: chatDraft.trim(),
+            locationLabel: label,
+            locationLat: latitude,
+            locationLon: longitude,
+          })
+          setChatMessages((prev) => [...prev, res.chatMessage])
+          setChatDraft('')
+          const [chatRes, noteRes] = await Promise.all([listChats(token), listNotifications(token)])
+          setChats(chatRes.conversations || [])
+          setNotifications(noteRes.notifications || [])
+        } catch (error) {
+          setChatNotice(error.message)
+        } finally {
+          setChatLocationLoading(false)
+        }
+      },
+      (error) => {
+        setChatLocationLoading(false)
+        if (error.code === error.PERMISSION_DENIED) {
+          setChatNotice('Location permission was denied.')
+          return
+        }
+        setChatNotice('Could not get your current location.')
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 },
+    )
   }
 
   const openFeedRequestDetails = (request) => {
@@ -1222,6 +1510,12 @@ function App() {
       return undefined
     }
 
+    const coords = [selectedLocations.from.lat, selectedLocations.from.lon, selectedLocations.to.lat, selectedLocations.to.lon]
+    if (coords.some((value) => typeof value !== 'number' || Number.isNaN(value))) {
+      setRoutePreview({ loading: false, error: 'Route preview requires selecting locations from suggestions.', data: null })
+      return undefined
+    }
+
     const controller = new AbortController()
     setRoutePreview((prev) => ({ ...prev, loading: true, error: '', data: null }))
 
@@ -1231,7 +1525,7 @@ function App() {
       })
       .catch((error) => {
         if (error.name !== 'AbortError') {
-          setRoutePreview({ loading: false, error: error.message, data: null })
+          setRoutePreview({ loading: false, error: error.message || 'Route preview failed. Try again.', data: null })
         }
       })
 
@@ -1261,6 +1555,20 @@ function App() {
     return <div className="loading-screen">Restoring session...</div>
   }
 
+  const goToHomeFromBrand = (e) => {
+    e.preventDefault()
+    if (user) {
+      setActiveView('home')
+      setHomeNotice('')
+      return
+    }
+    setActiveTab('login')
+    setErrors({})
+    setBanner('')
+    setOverlayNotice('')
+    setActiveOverlay('')
+  }
+
   if (user) {
     const profileName = profileForm.name || user.name || 'RideX member'
     const hasRating = user.ratingCount > 0
@@ -1271,30 +1579,35 @@ function App() {
     return (
       <main className="profile-shell">
         <section className="profile-nav">
-          <div className="profile-brand">
+          <a
+            href="/"
+            className="profile-brand profile-brand-home"
+            onClick={goToHomeFromBrand}
+            aria-label="RideX home"
+          >
             <div className="profile-brand-mark">
               <RideMarkIcon />
             </div>
-            <h1 className="profile-brand-text">
+            <span className="profile-brand-text">
               <span className="logo-dark">Ride</span>
               <span className="logo-accent">X</span>
-            </h1>
-          </div>
+            </span>
+          </a>
 
           <nav className="profile-nav-links" aria-label="Primary navigation">
             <button className={`profile-nav-link ${activeView === 'home' || activeView === 'request' || activeView === 'publish' ? 'is-active' : ''}`} type="button" onClick={() => setActiveView('home')}>
               <NavIcon path="M12 8.5a3.5 3.5 0 1 0 0 7a3.5 3.5 0 0 0 0-7Zm0-5v2.2m0 12.6V20.5m8.5-8.5h-2.2M5.7 12H3.5" />
               <span>Explore</span>
             </button>
-            <button className="profile-nav-link" type="button" onClick={() => setActiveView('home')}>
+            <button className={`profile-nav-link ${activeView === 'trips' ? 'is-active' : ''}`} type="button" onClick={() => setActiveView('trips')}>
               <NavIcon path="M5 9.5h14M7.5 9.5V8A2.5 2.5 0 0 1 10 5.5h4A2.5 2.5 0 0 1 16.5 8v1.5M6 18.5h12a1.5 1.5 0 0 0 1.5-1.5v-6A1.5 1.5 0 0 0 18 9.5H6A1.5 1.5 0 0 0 4.5 11v6A1.5 1.5 0 0 0 6 18.5Z" />
               <span>My Trips</span>
             </button>
-            <button className="profile-nav-link" type="button" onClick={() => setActiveView('home')}>
+            <button className={`profile-nav-link ${activeView === 'chats' ? 'is-active' : ''}`} type="button" onClick={() => setActiveView('chats')}>
               <NavIcon path="M6 16.5V7.5A2.5 2.5 0 0 1 8.5 5h7A2.5 2.5 0 0 1 18 7.5v6A2.5 2.5 0 0 1 15.5 16H9l-3 3v-2.5Z" />
               <span>Chats</span>
             </button>
-            <button className="profile-nav-link profile-nav-link-notification" type="button" onClick={() => setActiveView('home')}>
+            <button className={`profile-nav-link profile-nav-link-notification ${activeView === 'notifications' ? 'is-active' : ''}`} type="button" onClick={() => setActiveView('notifications')}>
               <NavIcon path="M12 5.5a3 3 0 0 0-3 3v1.2c0 .6-.2 1.2-.6 1.7L7.2 13a1 1 0 0 0 .8 1.6h8a1 1 0 0 0 .8-1.6l-1.2-1.6a2.8 2.8 0 0 1-.6-1.7V8.5a3 3 0 0 0-3-3Zm0 13.5a2 2 0 0 1-1.9-1.4h3.8A2 2 0 0 1 12 19Z" />
               <span>Notifications</span>
             </button>
@@ -1313,7 +1626,7 @@ function App() {
             </div>
 
             <div className="home-actions-grid">
-              <article className="home-action-card is-featured">
+              <article className="home-action-card is-featured" role="button" tabIndex={0} onClick={() => setActiveView('find')} onKeyDown={(e) => e.key === 'Enter' && setActiveView('find')}>
                 <div className="home-action-icon">⌕</div>
                 <h3>Find a ride</h3>
                 <p>Browse available rides near you.</p>
@@ -1339,20 +1652,30 @@ function App() {
               <section className="home-panel">
                 <div className="home-panel-header">
                   <h3>Upcoming trip</h3>
-                  <button type="button">View all</button>
+                  <button type="button" onClick={() => setActiveView('trips')} aria-label="View all trips">
+                    View all
+                  </button>
                 </div>
                 <div className="home-empty-card">
-                  <strong>{rideRequests.length ? `${rideRequests[0].fromLabel} → ${rideRequests[0].toLabel}` : 'No upcoming trips yet'}</strong>
+                  <strong>
+                    {upcomingTrip
+                      ? `${upcomingTrip.fromLabel} → ${upcomingTrip.toLabel}`
+                      : rideRequests.length
+                        ? `${rideRequests[0].fromLabel} → ${rideRequests[0].toLabel}`
+                        : 'No upcoming trips yet'}
+                  </strong>
                   <p>
-                    {rideRequests.length
-                      ? `${rideRequests[0].rideDate} at ${rideRequests[0].rideTime} • ${rideRequests[0].priceEstimate || 'Price estimate pending'}`
-                      : 'Your completed trips count will start at 0 and grow here as you finish rides.'}
+                    {upcomingTrip
+                      ? `${upcomingTrip.rideDate} at ${upcomingTrip.rideTime} • ${upcomingTrip.passengers} passenger${upcomingTrip.passengers > 1 ? 's' : ''} • ${upcomingTrip.status}`
+                      : rideRequests.length
+                        ? `${rideRequests[0].rideDate} at ${rideRequests[0].rideTime} • ${rideRequests[0].priceEstimate || 'Price estimate pending'}`
+                        : 'Your completed trips count will start at 0 and grow here as you finish rides.'}
                   </p>
                   <div className="home-stats-row">
                     <span>{rideRequests.length ? `${rideRequests.length} request${rideRequests.length > 1 ? 's' : ''} posted` : `${user.tripsCompleted} trips completed`}</span>
                     <span>{hasRating ? `${user.rating.toFixed(1)} rating` : 'Not rated yet'}</span>
                   </div>
-                  {rideRequests.length ? (
+                  {!upcomingTrip && rideRequests.length ? (
                     <div className="home-card-actions">
                       <button
                         className="profile-ghost-btn home-card-btn"
@@ -1797,6 +2120,396 @@ function App() {
           </section>
         )}
 
+        {activeView === 'find' && (
+          <section className="request-frame">
+            <div className="request-page-header">
+              <div>
+                <h2>Find a Ride</h2>
+                <p>Browse published rides from other drivers.</p>
+              </div>
+              <button className="request-cancel-top" type="button" onClick={() => setActiveView('home')}>Back</button>
+            </div>
+
+            <div className="request-grid">
+              <div className="request-form-card">
+                <section className="request-block">
+                  <div className="request-block-header">
+                    <h3>Filters</h3>
+                    <span>Search rides</span>
+                  </div>
+                  <div className="request-inline-grid">
+                    <label className="request-field">
+                      <span>Date</span>
+                      <div className="request-input-wrap">
+                        <input type="date" value={publishedRideFeedFilters.date} onChange={(e) => setPublishedRideFeedFilters((prev) => ({ ...prev, date: e.target.value }))} />
+                      </div>
+                    </label>
+                    <label className="request-field">
+                      <span>Route search</span>
+                      <div className="request-input-wrap">
+                        <input type="text" placeholder="City, airport, neighborhood…" value={publishedRideFeedFilters.route} onChange={(e) => setPublishedRideFeedFilters((prev) => ({ ...prev, route: e.target.value }))} />
+                      </div>
+                    </label>
+                  </div>
+                  <div className="request-inline-grid">
+                    <label className="request-field">
+                      <span>Seats needed</span>
+                      <div className="request-input-wrap">
+                        <input type="number" min="1" max="8" value={publishedRideFeedFilters.seats} onChange={(e) => setPublishedRideFeedFilters((prev) => ({ ...prev, seats: e.target.value }))} />
+                      </div>
+                    </label>
+                    <label className="request-field">
+                      <span>Max price / seat</span>
+                      <div className="request-input-wrap">
+                        <input type="number" min="0" step="1" value={publishedRideFeedFilters.maxPrice} onChange={(e) => setPublishedRideFeedFilters((prev) => ({ ...prev, maxPrice: e.target.value }))} />
+                      </div>
+                    </label>
+                  </div>
+
+                  <div className="request-inline-grid">
+                    <label className="request-field">
+                      <span>Ride type</span>
+                      <div className="request-input-wrap">
+                        <select value={publishedRideFeedFilters.rideType} onChange={(e) => setPublishedRideFeedFilters((prev) => ({ ...prev, rideType: e.target.value }))}>
+                          <option value="">Any</option>
+                          <option value="shared">Shared</option>
+                          <option value="private">Private</option>
+                        </select>
+                      </div>
+                    </label>
+                    <label className="request-field">
+                      <span>Vehicle type</span>
+                      <div className="request-input-wrap">
+                        <select value={publishedRideFeedFilters.vehicleType} onChange={(e) => setPublishedRideFeedFilters((prev) => ({ ...prev, vehicleType: e.target.value }))}>
+                          <option value="">Any</option>
+                          <option value="any">Any</option>
+                          <option value="sedan">Sedan</option>
+                          <option value="suv">SUV</option>
+                          <option value="van">Van</option>
+                        </select>
+                      </div>
+                    </label>
+                  </div>
+
+                  <div className="request-inline-grid">
+                    <label className="request-field">
+                      <span>Luggage</span>
+                      <div className="request-input-wrap">
+                        <select value={publishedRideFeedFilters.luggageAllowed} onChange={(e) => setPublishedRideFeedFilters((prev) => ({ ...prev, luggageAllowed: e.target.value }))}>
+                          <option value="">Any</option>
+                          <option value="small">Small</option>
+                          <option value="medium">Medium</option>
+                          <option value="large">Large</option>
+                          <option value="none">None</option>
+                        </select>
+                      </div>
+                    </label>
+                    <label className="request-field">
+                      <span>Flexibility</span>
+                      <div className="request-input-wrap">
+                        <select value={publishedRideFeedFilters.flexibility} onChange={(e) => setPublishedRideFeedFilters((prev) => ({ ...prev, flexibility: e.target.value }))}>
+                          <option value="">Any</option>
+                          <option value="exact">Exact</option>
+                          <option value="15">±15 minutes</option>
+                          <option value="30">±30 minutes</option>
+                          <option value="flexible">Flexible</option>
+                        </select>
+                      </div>
+                    </label>
+                  </div>
+                </section>
+              </div>
+
+              <div className="request-preview-card">
+                <div className="request-block-header">
+                  <h3>Available rides</h3>
+                  <span>{publishedRideFeedLoading ? 'Loading…' : `${publishedRideFeed.length} found`}</span>
+                </div>
+
+                {publishedRideFeedNotice ? <p className="request-status">{publishedRideFeedNotice}</p> : null}
+                {publishedRideFeedLoading ? <p className="request-status">Loading published rides…</p> : null}
+
+                {!publishedRideFeedLoading && !publishedRideFeed.length ? (
+                  <div className="home-empty-card">
+                    <strong>No matching rides</strong>
+                    <p>Adjust filters or publish a ride for others to find you.</p>
+                  </div>
+                ) : null}
+
+                <div className="request-feed-list">
+                  {publishedRideFeed.map((ride) => (
+                    <article
+                      key={ride.id}
+                      className="publish-request-card"
+                    >
+                      <div className="publish-request-top">
+                        <div>
+                          <h3>{ride.fromLabel} → {ride.toLabel}</h3>
+                          <p>{ride.rideDate} • {ride.rideTime} • {Number(publishedRideFeedFilters.seats || 1)} passenger{Number(publishedRideFeedFilters.seats || 1) > 1 ? 's' : ''}</p>
+                        </div>
+                        <strong>${Number(ride.pricePerSeat || 0).toFixed(0)}/seat</strong>
+                      </div>
+                      <div className="request-metrics">
+                        <span>{ride.driverName || 'Driver'}</span>
+                        <span>{ride.routeMiles || '—'} miles</span>
+                        <span>{ride.routeDuration || 'Duration pending'}</span>
+                      </div>
+                      <p className="publish-request-notes">{ride.notes || 'No notes from driver.'}</p>
+                      <div className="publish-request-actions">
+                        <button className="profile-primary-btn" type="button" onClick={() => handlePublishedRideAction(ride.id, 'accept')} disabled={requestActionLoading === `${ride.id}:accept`}>
+                          {requestActionLoading === `${ride.id}:accept` ? 'Accepting...' : 'Accept'}
+                        </button>
+                        <button className="profile-ghost-btn" type="button" onClick={() => handlePublishedRideAction(ride.id, 'negotiate')} disabled={requestActionLoading === `${ride.id}:negotiate`}>
+                          {requestActionLoading === `${ride.id}:negotiate` ? 'Sending...' : 'Negotiate'}
+                        </button>
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </section>
+        )}
+
+        {activeView === 'notifications' && (
+          <section className="request-frame">
+            <div className="request-page-header">
+              <div>
+                <h2>Notifications</h2>
+                <p>Updates for confirmed rides and negotiations.</p>
+              </div>
+              <button className="request-cancel-top" type="button" onClick={() => setActiveView('home')}>Back</button>
+            </div>
+
+            <div className="request-preview-card">
+              <div className="request-block-header">
+                <h3>Recent</h3>
+                <span>{notifications.length} total</span>
+              </div>
+
+              {!notifications.length ? (
+                <div className="home-empty-card">
+                  <strong>No notifications yet</strong>
+                  <p>Accept or negotiate on a ride to generate real notifications.</p>
+                </div>
+              ) : (
+                <div className="request-feed-list">
+                  {notifications.map((n) => (
+                    <article key={n.id} className="request-feed-card">
+                      <div className="request-feed-card-header">
+                        <strong>{n.title}</strong>
+                        <span>{new Date(n.createdAt).toLocaleString()}</span>
+                      </div>
+                      {n.body ? <p className="request-feed-card-notes">{n.body}</p> : null}
+                    </article>
+                  ))}
+                </div>
+              )}
+            </div>
+          </section>
+        )}
+
+        {activeView === 'chats' && (
+          <section className="request-frame">
+            <div className="request-page-header">
+              <div>
+                <h2>Chats</h2>
+                <p>Real conversations between riders and drivers for active requests, negotiations, and trips.</p>
+              </div>
+              <button className="request-cancel-top" type="button" onClick={() => setActiveView('home')}>Back</button>
+            </div>
+
+            <div className="chat-shell">
+              <aside className="chat-sidebar">
+                <div className="request-block-header">
+                  <h3>Conversations</h3>
+                  <span>{chatLoading ? 'Loading…' : `${chats.length} total`}</span>
+                </div>
+
+                {!chats.length ? (
+                  <div className="home-empty-card">
+                    <strong>No chats yet</strong>
+                    <p>Accept or negotiate on a ride to start a real conversation.</p>
+                  </div>
+                ) : (
+                  <div className="chat-list">
+                    {chats.map((conversation) => (
+                      <button
+                        key={conversation.id}
+                        type="button"
+                        className={`chat-list-item ${activeChatId === conversation.id ? 'is-active' : ''}`}
+                        onClick={() => setActiveChatId(conversation.id)}
+                      >
+                        <div className="chat-list-top">
+                          <strong>{conversation.otherUserName || 'RideX user'}</strong>
+                          <span>{formatChatTimestamp(conversation.lastMessageAt || conversation.updatedAt)}</span>
+                        </div>
+                        <div className="chat-list-route">{conversation.fromLabel || 'Route pending'} → {conversation.toLabel || 'Route pending'}</div>
+                        <p>{conversation.lastMessage || 'Conversation created. Say hello to coordinate details.'}</p>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </aside>
+
+              <section className="chat-panel">
+                {activeChat ? (
+                  <>
+                    <div className="chat-panel-header">
+                      <div>
+                        <h3>{activeChat.otherUserName || 'RideX user'}</h3>
+                        <p>{activeChat.fromLabel} → {activeChat.toLabel} • {activeChat.rideDate} {activeChat.rideTime ? `at ${activeChat.rideTime}` : ''}</p>
+                      </div>
+                      <span className="chat-status-pill">{activeChat.tripStatus || activeChat.status}</span>
+                    </div>
+
+                    <div className="chat-messages">
+                      {chatMessagesLoading ? (
+                        <p className="request-status">Loading messages…</p>
+                      ) : !chatMessages.length ? (
+                        <div className="home-empty-card">
+                          <strong>No messages yet</strong>
+                          <p>Use the composer below to start the conversation.</p>
+                        </div>
+                      ) : (
+                        chatMessages.map((message) => (
+                          <article key={message.id} className={`chat-message ${message.senderUserId === user.id ? 'is-mine' : ''}`}>
+                            <div className="chat-message-bubble">
+                              {message.messageType === 'image' && message.imageData ? (
+                                <img className="chat-message-image" src={message.imageData} alt={message.body || 'Shared chat image'} />
+                              ) : null}
+                              {message.messageType === 'location' && message.locationLabel ? (
+                                <a
+                                  className="chat-location-card"
+                                  href={`https://www.google.com/maps?q=${message.locationLat},${message.locationLon}`}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                >
+                                  <strong>{message.locationLabel}</strong>
+                                  <span>{message.locationLat.toFixed(6)}, {message.locationLon.toFixed(6)}</span>
+                                </a>
+                              ) : null}
+                              {message.body ? <p>{message.body}</p> : null}
+                              <span>{formatChatTimestamp(message.createdAt)}</span>
+                            </div>
+                          </article>
+                        ))
+                      )}
+                    </div>
+
+                    <form className="chat-composer" onSubmit={handleSendChat}>
+                      <input ref={chatImageInputRef} type="file" accept="image/*" className="chat-hidden-input" onChange={handleChatImagePick} />
+                      <textarea
+                        value={chatDraft}
+                        onChange={(e) => setChatDraft(e.target.value)}
+                        placeholder="Write a message, add an image, or share your current location."
+                        rows={3}
+                      />
+                      {chatImageDraft ? (
+                        <div className="chat-attachment-preview">
+                          <img src={chatImageDraft} alt={chatImageName || 'Selected attachment'} />
+                          <div>
+                            <strong>{chatImageName || 'Image attached'}</strong>
+                            <button type="button" className="profile-ghost-btn" onClick={() => {
+                              setChatImageDraft('')
+                              setChatImageName('')
+                            }}>
+                              Remove image
+                            </button>
+                          </div>
+                        </div>
+                      ) : null}
+                      <div className="chat-composer-actions">
+                        <div className="chat-composer-tools">
+                          <button className="profile-ghost-btn" type="button" onClick={() => chatImageInputRef.current?.click()}>
+                            Add image
+                          </button>
+                          <button className="profile-ghost-btn" type="button" onClick={handleShareCurrentLocation} disabled={chatLocationLoading || chatSending}>
+                            {chatLocationLoading ? 'Sharing location…' : 'Share location'}
+                          </button>
+                        </div>
+                        <div className="chat-composer-submit">
+                          {chatNotice ? <p className="request-status">{chatNotice}</p> : <span></span>}
+                          <button className="profile-primary-btn" type="submit" disabled={chatSending || chatLocationLoading}>
+                            {chatSending ? 'Sending…' : 'Send message'}
+                          </button>
+                        </div>
+                      </div>
+                    </form>
+                  </>
+                ) : (
+                  <div className="home-empty-card">
+                    <strong>Select a chat</strong>
+                    <p>Your trip and negotiation conversations will appear here once a ride interaction creates them.</p>
+                  </div>
+                )}
+              </section>
+            </div>
+          </section>
+        )}
+
+        {activeView === 'trips' && (
+          <section className="request-frame">
+            <div className="request-page-header">
+              <div>
+                <h2>My Trips</h2>
+                <p>Your confirmed rides as a rider or driver.</p>
+              </div>
+              <button className="request-cancel-top" type="button" onClick={() => setActiveView('home')}>Back</button>
+            </div>
+
+            <div className="request-preview-card">
+              <div className="request-block-header">
+                <h3>Confirmed</h3>
+                <span>{trips.length} total</span>
+              </div>
+
+              {!trips.length ? (
+                <div className="home-empty-card">
+                  <strong>No confirmed trips yet</strong>
+                  <p>Accept a ride (or accept a rider request) to create a confirmed trip.</p>
+                </div>
+              ) : (
+                <div className="request-feed-list">
+                  {trips.map((t) => (
+                    <article key={t.id} className="publish-request-card">
+                      <div className="publish-request-top">
+                        <div>
+                          <h3>{t.fromLabel} → {t.toLabel}</h3>
+                          <p>{t.rideDate} • {t.rideTime} • {t.passengers} passenger{t.passengers > 1 ? 's' : ''}</p>
+                        </div>
+                        <strong>{t.estimatedTotal ? `$${Number(t.estimatedTotal).toFixed(0)}` : t.pricePerSeat ? `$${Number(t.pricePerSeat).toFixed(0)}/seat` : '—'}</strong>
+                      </div>
+                      <div className="request-metrics">
+                        <span>Driver: {t.driverName || '—'}</span>
+                        <span>Rider: {t.riderName || '—'}</span>
+                        <span>{t.routeMiles || '—'} miles</span>
+                        <span>{t.routeDuration || '—'}</span>
+                      </div>
+                      <p className="publish-request-notes">Status: {t.status}</p>
+                      <div className="publish-request-actions">
+                        {(() => {
+                          const conversation = chats.find((item) => item.tripId === t.id || item.rideRequestId === t.rideRequestId)
+                          return conversation ? (
+                            <button className="profile-primary-btn" type="button" onClick={() => handleOpenChat(conversation.id)}>
+                              Open chat
+                            </button>
+                          ) : null
+                        })()}
+                        {t.status === 'confirmed' ? (
+                          <button className="profile-ghost-btn" type="button" onClick={() => handleCancelTrip(t.id)}>
+                            Cancel trip
+                          </button>
+                        ) : null}
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              )}
+            </div>
+          </section>
+        )}
+
         {activeView === 'request' && (
           <section className="request-frame">
             <div className="request-page-header">
@@ -1886,8 +2599,8 @@ function App() {
                     <label className="request-field">
                       <span>Date</span>
                       <div className={`request-input-wrap ${requestErrors.date ? 'has-error' : ''}`}>
-                        <input type="date" value={requestForm.date} onChange={(e) => handleRequestFieldChange('date', e.target.value)} />
-                      </div>
+                          <input type="date" value={requestForm.date} onChange={(e) => handleRequestFieldChange('date', e.target.value)} />
+                        </div>
                       {requestErrors.date && <small>{requestErrors.date}</small>}
                     </label>
 
@@ -2570,15 +3283,20 @@ function App() {
     <main className="app-shell">
       <section className="auth-frame">
         <div className="auth-left">
-          <div className="auth-brand">
+          <a
+            href="/"
+            className="auth-brand auth-brand-home"
+            onClick={goToHomeFromBrand}
+            aria-label="RideX home"
+          >
             <div className="auth-brand-mark">
               <RideMarkIcon />
             </div>
-            <h1 className="logo">
+            <span className="logo">
               <span className="logo-dark">Ride</span>
               <span className="logo-accent">X</span>
-            </h1>
-          </div>
+            </span>
+          </a>
           <h2 className="hero-heading">
             Turn Empty Seats into Earnings.
           </h2>
