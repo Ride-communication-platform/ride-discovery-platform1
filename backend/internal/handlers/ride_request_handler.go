@@ -76,6 +76,10 @@ func (h *AuthHandler) createRideRequest(w http.ResponseWriter, r *http.Request, 
 		writeError(w, http.StatusBadRequest, "Date and time are required")
 		return
 	}
+	if !isValidRideDate(payload.RideDate) {
+		writeError(w, http.StatusBadRequest, rideDateMessage())
+		return
+	}
 	if payload.Passengers < 1 || payload.Passengers > 6 {
 		writeError(w, http.StatusBadRequest, "Passengers must be between 1 and 6")
 		return
@@ -255,6 +259,10 @@ func (h *AuthHandler) updateRideRequest(w http.ResponseWriter, r *http.Request, 
 	}
 	if payload.RideDate == "" || payload.RideTime == "" {
 		writeError(w, http.StatusBadRequest, "Date and time are required")
+		return
+	}
+	if !isValidRideDate(payload.RideDate) {
+		writeError(w, http.StatusBadRequest, rideDateMessage())
 		return
 	}
 	if payload.Passengers < 1 || payload.Passengers > 6 {

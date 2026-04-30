@@ -94,6 +94,10 @@ func (h *AuthHandler) createPublishedRide(w http.ResponseWriter, r *http.Request
 		writeError(w, http.StatusBadRequest, "Date and time are required")
 		return
 	}
+	if !isValidRideDate(payload.RideDate) {
+		writeError(w, http.StatusBadRequest, rideDateMessage())
+		return
+	}
 	if payload.AvailableSeats < 1 || payload.AvailableSeats > 8 || payload.TotalSeats < 1 || payload.TotalSeats > 8 {
 		writeError(w, http.StatusBadRequest, "Seats must be between 1 and 8")
 		return
@@ -258,6 +262,25 @@ func (h *AuthHandler) PublishedRideRespond(w http.ResponseWriter, r *http.Reques
 
 		// Hide this ride from everyone else while confirmed.
 		_ = h.store.SetPublishedRideStatus(r.Context(), ride.ID, ride.UserID, "inactive")
+	}
+
+	conversation, err := h.store.CreateOrGetConversation(r.Context(), userID, ride.UserID, request.ID, ride.ID, func() string {
+		if trip != nil {
+			return trip.ID
+		}
+		return ""
+	}())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "Could not prepare chat")
+		return
+	}
+	if payload.Message != "" {
+		_, _ = h.store.CreateChatMessage(r.Context(), models.ChatMessage{
+			ConversationID: conversation.ID,
+			SenderUserID:   userID,
+			Body:           payload.Message,
+			MessageType:    "text",
+		})
 	}
 
 	// Notifications for both parties.
@@ -435,6 +458,33 @@ func (h *AuthHandler) RideRequestRespond(w http.ResponseWriter, r *http.Request)
 			return
 		}
 		trip = createdTrip
+	}
+
+	conversation, err := h.store.CreateOrGetConversation(r.Context(), request.UserID, userID, requestID, payload.PublishedRideID, func() string {
+		if trip != nil {
+			return trip.ID
+		}
+		return ""
+	}())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "Could not prepare chat")
+		return
+	}
+	if payload.Message != "" {
+		_, _ = h.store.CreateChatMessage(r.Context(), models.ChatMessage{
+			ConversationID: conversation.ID,
+			SenderUserID:   userID,
+			Body:           payload.Message,
+			MessageType:    "text",
+		})
+	}
+
+	if payload.Action == "accept" {
+		_, _ = h.store.CreateNotification(r.Context(), request.UserID, "Ride request accepted", "A driver accepted your ride request. Check My Trips for the confirmed trip.")
+		_, _ = h.store.CreateNotification(r.Context(), userID, "Trip confirmed", "You accepted a rider request and created a confirmed trip.")
+	} else {
+		_, _ = h.store.CreateNotification(r.Context(), request.UserID, "Driver started a negotiation", "A driver responded to your ride request and wants to discuss details.")
+		_, _ = h.store.CreateNotification(r.Context(), userID, "Negotiation sent", "You sent a negotiation message for a rider request.")
 	}
 
 	message := "Request marked for follow-up."

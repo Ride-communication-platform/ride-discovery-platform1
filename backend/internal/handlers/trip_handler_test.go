@@ -45,7 +45,7 @@ func TestRideRequestRespond_AcceptCreatesTrip(t *testing.T) {
 		ToLabel:           "B",
 		ToLat:             2,
 		ToLon:             2,
-		RideDate:          "2026-04-13",
+		RideDate:          "2026-01-13",
 		RideTime:          "10:00",
 		Flexibility:       "exact",
 		Passengers:        1,
@@ -92,6 +92,18 @@ func TestRideRequestRespond_AcceptCreatesTrip(t *testing.T) {
 	if res.Trip.RiderUserID != rider.ID || res.Trip.DriverUserID != driver.ID {
 		t.Fatalf("unexpected rider/driver ids")
 	}
+
+	riderNotes, err := st.ListNotificationsByUser(context.Background(), rider.ID)
+	if err != nil {
+		t.Fatalf("list rider notifications: %v", err)
+	}
+	driverNotes, err := st.ListNotificationsByUser(context.Background(), driver.ID)
+	if err != nil {
+		t.Fatalf("list driver notifications: %v", err)
+	}
+	if len(riderNotes) == 0 || len(driverNotes) == 0 {
+		t.Fatalf("expected notifications for both rider and driver")
+	}
 }
 
 func TestTrips_ListTripsByUser(t *testing.T) {
@@ -107,7 +119,7 @@ func TestTrips_ListTripsByUser(t *testing.T) {
 		ToLabel:           "B",
 		ToLat:             2,
 		ToLon:             2,
-		RideDate:          "2026-04-13",
+		RideDate:          "2026-01-13",
 		RideTime:          "10:00",
 		Flexibility:       "exact",
 		Passengers:        1,
@@ -166,7 +178,7 @@ func TestPublishedRideRespond_AcceptCreatesTripAndNotifications(t *testing.T) {
 		ToLabel:        "Orlando",
 		ToLat:          28.5383,
 		ToLon:          -81.3792,
-		RideDate:       "2026-04-15",
+		RideDate:       "2026-01-15",
 		RideTime:       "07:30",
 		Flexibility:    "exact",
 		AvailableSeats: 3,
@@ -241,7 +253,7 @@ func TestCancelTrip_ReactivatesPublishedRide(t *testing.T) {
 		ToLabel:        "Orlando",
 		ToLat:          28.5383,
 		ToLon:          -81.3792,
-		RideDate:       "2026-04-15",
+		RideDate:       "2026-01-15",
 		RideTime:       "07:30",
 		Flexibility:    "exact",
 		AvailableSeats: 3,
@@ -293,4 +305,3 @@ func TestCancelTrip_ReactivatesPublishedRide(t *testing.T) {
 		t.Fatalf("expected ride status active, got %s", updated.Status)
 	}
 }
-
