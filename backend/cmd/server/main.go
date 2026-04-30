@@ -86,6 +86,8 @@ func main() {
 	mux.Handle("/api/trips", middleware.AuthMiddleware(jwtManager)(http.HandlerFunc(authHandler.Trips)))
 	mux.Handle("/api/trips/", middleware.AuthMiddleware(jwtManager)(http.HandlerFunc(authHandler.Trips)))
 	mux.Handle("/api/notifications", middleware.AuthMiddleware(jwtManager)(http.HandlerFunc(authHandler.Notifications)))
+	mux.Handle("/api/chats", middleware.AuthMiddleware(jwtManager)(http.HandlerFunc(authHandler.Chats)))
+	mux.Handle("/api/chats/", middleware.AuthMiddleware(jwtManager)(http.HandlerFunc(authHandler.Chats)))
 
 	server := &http.Server{
 		Addr:         ":" + port,
