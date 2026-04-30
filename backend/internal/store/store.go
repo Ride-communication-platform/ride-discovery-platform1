@@ -145,6 +145,38 @@ CREATE TABLE IF NOT EXISTS notifications (
   read INTEGER NOT NULL DEFAULT 0,
   created_at TIMESTAMP NOT NULL,
   FOREIGN KEY (user_id) REFERENCES users(id)
+);
+
+CREATE TABLE IF NOT EXISTS chat_conversations (
+  id TEXT PRIMARY KEY,
+  rider_user_id TEXT NOT NULL,
+  driver_user_id TEXT NOT NULL,
+  ride_request_id TEXT NOT NULL DEFAULT '',
+  published_ride_id TEXT NOT NULL DEFAULT '',
+  trip_id TEXT NOT NULL DEFAULT '',
+  status TEXT NOT NULL DEFAULT 'active',
+  created_at TIMESTAMP NOT NULL,
+  updated_at TIMESTAMP NOT NULL,
+  FOREIGN KEY (rider_user_id) REFERENCES users(id),
+  FOREIGN KEY (driver_user_id) REFERENCES users(id),
+  FOREIGN KEY (ride_request_id) REFERENCES ride_requests(id),
+  FOREIGN KEY (published_ride_id) REFERENCES published_rides(id),
+  FOREIGN KEY (trip_id) REFERENCES trips(id)
+);
+
+CREATE TABLE IF NOT EXISTS chat_messages (
+  id TEXT PRIMARY KEY,
+  conversation_id TEXT NOT NULL,
+  sender_user_id TEXT NOT NULL,
+  body TEXT NOT NULL,
+  message_type TEXT NOT NULL DEFAULT 'text',
+  image_data TEXT NOT NULL DEFAULT '',
+  location_label TEXT NOT NULL DEFAULT '',
+  location_lat REAL NOT NULL DEFAULT 0,
+  location_lon REAL NOT NULL DEFAULT 0,
+  created_at TIMESTAMP NOT NULL,
+  FOREIGN KEY (conversation_id) REFERENCES chat_conversations(id),
+  FOREIGN KEY (sender_user_id) REFERENCES users(id)
 );`
 
 	if _, err := db.Exec(strings.TrimSpace(migration)); err != nil {
@@ -204,6 +236,18 @@ CREATE TABLE IF NOT EXISTS notifications (
 	} {
 		if _, err := db.Exec(statement); err != nil && !strings.Contains(strings.ToLower(err.Error()), "duplicate column") && !strings.Contains(strings.ToLower(err.Error()), "no such table") {
 			return fmt.Errorf("apply ride request actions alter: %w", err)
+		}
+	}
+
+	for _, statement := range []string{
+		`ALTER TABLE chat_messages ADD COLUMN message_type TEXT NOT NULL DEFAULT 'text';`,
+		`ALTER TABLE chat_messages ADD COLUMN image_data TEXT NOT NULL DEFAULT '';`,
+		`ALTER TABLE chat_messages ADD COLUMN location_label TEXT NOT NULL DEFAULT '';`,
+		`ALTER TABLE chat_messages ADD COLUMN location_lat REAL NOT NULL DEFAULT 0;`,
+		`ALTER TABLE chat_messages ADD COLUMN location_lon REAL NOT NULL DEFAULT 0;`,
+	} {
+		if _, err := db.Exec(statement); err != nil && !strings.Contains(strings.ToLower(err.Error()), "duplicate column") && !strings.Contains(strings.ToLower(err.Error()), "no such table") {
+			return fmt.Errorf("apply chat messages alter: %w", err)
 		}
 	}
 
