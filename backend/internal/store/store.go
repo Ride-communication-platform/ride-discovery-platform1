@@ -42,19 +42,6 @@ func (s *Store) queryContext(ctx context.Context, query string, args ...any) (*s
 func (s *Store) queryRowContext(ctx context.Context, query string, args ...any) *sql.Row {
 	return s.DB.QueryRowContext(ctx, sqlx.Rebind(sqlx.DOLLAR, query), args...)
 }
-
-func (s *Store) execContext(ctx context.Context, query string, args ...any) (sql.Result, error) {
-	return s.DB.ExecContext(ctx, sqlx.Rebind(sqlx.DOLLAR, query), args...)
-}
-
-func (s *Store) queryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error) {
-	return s.DB.QueryContext(ctx, sqlx.Rebind(sqlx.DOLLAR, query), args...)
-}
-
-func (s *Store) queryRowContext(ctx context.Context, query string, args ...any) *sql.Row {
-	return s.DB.QueryRowContext(ctx, sqlx.Rebind(sqlx.DOLLAR, query), args...)
-}
-
 func runMigrations(db *sql.DB) error {
 	migration := `
 	CREATE TABLE IF NOT EXISTS users (
