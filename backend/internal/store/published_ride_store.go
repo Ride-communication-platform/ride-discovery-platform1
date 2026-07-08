@@ -46,7 +46,7 @@ func (s *Store) CreatePublishedRide(ctx context.Context, input models.PublishedR
 		route_duration, earnings_estimate, created_at
 	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 
-	_, err := s.DB.ExecContext(
+	_, err := s.execContext(
 		ctx,
 		query,
 		ride.ID, ride.UserID, ride.Status, ride.FromLabel, ride.FromLat, ride.FromLon, ride.ToLabel, ride.ToLat, ride.ToLon,
@@ -71,7 +71,7 @@ func (s *Store) ListPublishedRidesByUser(ctx context.Context, userID string) ([]
 	WHERE user_id = ?
 	ORDER BY created_at DESC`
 
-	rows, err := s.DB.QueryContext(ctx, query, userID)
+	rows, err := s.queryContext(ctx, query, userID)
 	if err != nil {
 		return nil, fmt.Errorf("list published rides: %w", err)
 	}
@@ -145,7 +145,7 @@ func (s *Store) ListPublishedRideFeed(ctx context.Context, userID, dateFilter, r
 
 	query += ` ORDER BY pr.created_at DESC`
 
-	rows, err := s.DB.QueryContext(ctx, query, args...)
+	rows, err := s.queryContext(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("list published ride feed: %w", err)
 	}
@@ -204,7 +204,7 @@ func (s *Store) ListRideRequestFeed(ctx context.Context, userID, dateFilter, rou
 
 	query += ` ORDER BY rr.created_at DESC`
 
-	rows, err := s.DB.QueryContext(ctx, query, args...)
+	rows, err := s.queryContext(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("list ride request feed: %w", err)
 	}
@@ -246,7 +246,7 @@ func (s *Store) CreateRideRequestAction(ctx context.Context, input models.RideRe
 		id, ride_request_id, driver_user_id, published_ride_id, action, message, created_at
 	) VALUES (?, ?, ?, ?, ?, ?, ?)`
 
-	_, err := s.DB.ExecContext(ctx, query, action.ID, action.RideRequestID, action.DriverUserID, action.PublishedRideID, action.Action, action.Message, action.CreatedAt)
+	_, err := s.execContext(ctx, query, action.ID, action.RideRequestID, action.DriverUserID, action.PublishedRideID, action.Action, action.Message, action.CreatedAt)
 	if err != nil {
 		return nil, fmt.Errorf("insert ride request action: %w", err)
 	}
@@ -263,7 +263,7 @@ func (s *Store) GetPublishedRideByID(ctx context.Context, rideID string) (*model
 	FROM published_rides WHERE id = ?`
 
 	var ride models.PublishedRide
-	err := s.DB.QueryRowContext(ctx, query, rideID).Scan(
+	err := s.queryRowContext(ctx, query, rideID).Scan(
 		&ride.ID, &ride.UserID, &ride.Status, &ride.FromLabel, &ride.FromLat, &ride.FromLon, &ride.ToLabel, &ride.ToLat, &ride.ToLon,
 		&ride.RideDate, &ride.RideTime, &ride.Flexibility, &ride.AvailableSeats, &ride.TotalSeats, &ride.PricePerSeat,
 		&ride.VehicleType, &ride.LuggageAllowed, &ride.RideType, &ride.VehicleInfo, &ride.Notes, &ride.RouteMiles,
@@ -279,7 +279,7 @@ func (s *Store) GetPublishedRideByID(ctx context.Context, rideID string) (*model
 }
 
 func (s *Store) SetPublishedRideStatus(ctx context.Context, rideID, ownerUserID, status string) error {
-	result, err := s.DB.ExecContext(ctx, `UPDATE published_rides SET status = ? WHERE id = ? AND user_id = ?`, strings.TrimSpace(status), strings.TrimSpace(rideID), strings.TrimSpace(ownerUserID))
+	result, err := s.execContext(ctx, `UPDATE published_rides SET status = ? WHERE id = ? AND user_id = ?`, strings.TrimSpace(status), strings.TrimSpace(rideID), strings.TrimSpace(ownerUserID))
 	if err != nil {
 		return fmt.Errorf("update published ride status: %w", err)
 	}

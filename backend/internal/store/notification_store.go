@@ -20,7 +20,7 @@ func (s *Store) CreateNotification(ctx context.Context, userID, title, body stri
 		CreatedAt: time.Now().UTC(),
 	}
 
-	_, err := s.DB.ExecContext(
+	_, err := s.execContext(
 		ctx,
 		`INSERT INTO notifications (id, user_id, title, body, read, created_at) VALUES (?, ?, ?, ?, ?, ?)`,
 		n.ID, n.UserID, n.Title, n.Body, 0, n.CreatedAt,
@@ -32,7 +32,7 @@ func (s *Store) CreateNotification(ctx context.Context, userID, title, body stri
 }
 
 func (s *Store) ListNotificationsByUser(ctx context.Context, userID string) ([]models.Notification, error) {
-	rows, err := s.DB.QueryContext(
+	rows, err := s.queryContext(
 		ctx,
 		`SELECT id, user_id, title, body, read, created_at
 		 FROM notifications
@@ -60,4 +60,3 @@ func (s *Store) ListNotificationsByUser(ctx context.Context, userID string) ([]m
 	}
 	return out, nil
 }
-

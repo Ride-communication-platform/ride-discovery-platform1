@@ -44,7 +44,7 @@ func (s *Store) CreateRideRequest(ctx context.Context, input models.RideRequest)
 		notes, route_miles, route_duration, price_estimate, created_at
 	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 
-	_, err := s.DB.ExecContext(
+	_, err := s.execContext(
 		ctx,
 		query,
 		request.ID, request.UserID, request.FromLabel, request.FromLat, request.FromLon,
@@ -71,7 +71,7 @@ func (s *Store) ListRideRequestsByUser(ctx context.Context, userID string) ([]mo
 	WHERE user_id = ?
 	ORDER BY created_at DESC`
 
-	rows, err := s.DB.QueryContext(ctx, query, userID)
+	rows, err := s.queryContext(ctx, query, userID)
 	if err != nil {
 		return nil, fmt.Errorf("list ride requests: %w", err)
 	}
@@ -109,7 +109,7 @@ func (s *Store) GetRideRequestByID(ctx context.Context, requestID string) (*mode
 	WHERE id = ?`
 
 	var request models.RideRequest
-	err := s.DB.QueryRowContext(ctx, query, requestID).Scan(
+	err := s.queryRowContext(ctx, query, requestID).Scan(
 		&request.ID, &request.UserID, &request.FromLabel, &request.FromLat, &request.FromLon,
 		&request.ToLabel, &request.ToLat, &request.ToLon, &request.RideDate, &request.RideTime,
 		&request.Flexibility, &request.Passengers, &request.Luggage, &request.MaxBudget,
@@ -128,7 +128,7 @@ func (s *Store) GetRideRequestByID(ctx context.Context, requestID string) (*mode
 }
 
 func (s *Store) DeleteRideRequest(ctx context.Context, requestID, userID string) error {
-	result, err := s.DB.ExecContext(
+	result, err := s.execContext(
 		ctx,
 		`DELETE FROM ride_requests WHERE id = ? AND user_id = ?`,
 		requestID,
@@ -157,7 +157,7 @@ func (s *Store) UpdateRideRequest(ctx context.Context, input models.RideRequest)
 		notes = ?, route_miles = ?, route_duration = ?, price_estimate = ?
 	WHERE id = ? AND user_id = ?`
 
-	result, err := s.DB.ExecContext(
+	result, err := s.execContext(
 		ctx,
 		query,
 		input.FromLabel, input.FromLat, input.FromLon, input.ToLabel, input.ToLat, input.ToLon,

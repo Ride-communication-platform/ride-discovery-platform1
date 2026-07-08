@@ -62,7 +62,7 @@ func (s *Store) CreateUser(ctx context.Context, name, email, passwordHash, verif
 	}
 
 	query := `INSERT INTO users (id, name, email, avatar_data, interests, password_hash, rating, rating_count, trips_completed, email_verified, verification_code, password_reset_code, password_reset_sent_at, auth_provider, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-	_, err = s.DB.ExecContext(ctx, query, user.ID, user.Name, user.Email, user.AvatarData, interestsJSON, user.PasswordHash, user.Rating, user.RatingCount, user.TripsCompleted, user.EmailVerified, user.VerificationCode, user.PasswordResetCode, nil, user.AuthProvider, user.CreatedAt)
+	_, err = s.execContext(ctx, query, user.ID, user.Name, user.Email, user.AvatarData, interestsJSON, user.PasswordHash, user.Rating, user.RatingCount, user.TripsCompleted, user.EmailVerified, user.VerificationCode, user.PasswordResetCode, nil, user.AuthProvider, user.CreatedAt)
 	if err != nil {
 		if strings.Contains(strings.ToLower(err.Error()), "unique") {
 			return nil, ErrEmailExists
@@ -75,7 +75,7 @@ func (s *Store) CreateUser(ctx context.Context, name, email, passwordHash, verif
 
 func (s *Store) GetUserByEmail(ctx context.Context, email string) (*models.User, error) {
 	query := `SELECT id, name, email, avatar_data, interests, password_hash, rating, rating_count, trips_completed, email_verified, verification_code, password_reset_code, password_reset_sent_at, auth_provider, created_at FROM users WHERE email = ?`
-	row := s.DB.QueryRowContext(ctx, query, strings.ToLower(strings.TrimSpace(email)))
+	row := s.queryRowContext(ctx, query, strings.ToLower(strings.TrimSpace(email)))
 
 	var u models.User
 	var interestsRaw string
@@ -95,7 +95,7 @@ func (s *Store) GetUserByEmail(ctx context.Context, email string) (*models.User,
 
 func (s *Store) GetUserByID(ctx context.Context, id string) (*models.User, error) {
 	query := `SELECT id, name, email, avatar_data, interests, password_hash, rating, rating_count, trips_completed, email_verified, verification_code, password_reset_code, password_reset_sent_at, auth_provider, created_at FROM users WHERE id = ?`
-	row := s.DB.QueryRowContext(ctx, query, id)
+	row := s.queryRowContext(ctx, query, id)
 
 	var u models.User
 	var interestsRaw string
@@ -120,7 +120,7 @@ func (s *Store) UpdateUserProfile(ctx context.Context, id, name, avatarData stri
 	}
 
 	query := `UPDATE users SET name = ?, avatar_data = ?, interests = ? WHERE id = ?`
-	result, err := s.DB.ExecContext(ctx, query, strings.TrimSpace(name), avatarData, interestsJSON, id)
+	result, err := s.execContext(ctx, query, strings.TrimSpace(name), avatarData, interestsJSON, id)
 	if err != nil {
 		return nil, fmt.Errorf("update user profile: %w", err)
 	}
@@ -161,7 +161,7 @@ func (s *Store) CreateOAuthUser(ctx context.Context, name, email, provider strin
 	}
 
 	query := `INSERT INTO users (id, name, email, avatar_data, interests, password_hash, rating, rating_count, trips_completed, email_verified, verification_code, password_reset_code, password_reset_sent_at, auth_provider, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-	_, err = s.DB.ExecContext(ctx, query, user.ID, user.Name, user.Email, user.AvatarData, interestsJSON, user.PasswordHash, user.Rating, user.RatingCount, user.TripsCompleted, user.EmailVerified, user.VerificationCode, user.PasswordResetCode, nil, user.AuthProvider, user.CreatedAt)
+	_, err = s.execContext(ctx, query, user.ID, user.Name, user.Email, user.AvatarData, interestsJSON, user.PasswordHash, user.Rating, user.RatingCount, user.TripsCompleted, user.EmailVerified, user.VerificationCode, user.PasswordResetCode, nil, user.AuthProvider, user.CreatedAt)
 	if err != nil {
 		if strings.Contains(strings.ToLower(err.Error()), "unique") {
 			return nil, ErrEmailExists
@@ -174,7 +174,7 @@ func (s *Store) CreateOAuthUser(ctx context.Context, name, email, provider strin
 
 func (s *Store) VerifyUserByEmail(ctx context.Context, email string) error {
 	query := `UPDATE users SET email_verified = 1, verification_code = '' WHERE email = ?`
-	result, err := s.DB.ExecContext(ctx, query, strings.ToLower(strings.TrimSpace(email)))
+	result, err := s.execContext(ctx, query, strings.ToLower(strings.TrimSpace(email)))
 	if err != nil {
 		return fmt.Errorf("verify user by email: %w", err)
 	}
@@ -190,7 +190,7 @@ func (s *Store) VerifyUserByEmail(ctx context.Context, email string) error {
 
 func (s *Store) UpdateVerificationCode(ctx context.Context, email, verificationCode string) error {
 	query := `UPDATE users SET verification_code = ? WHERE email = ?`
-	result, err := s.DB.ExecContext(ctx, query, verificationCode, strings.ToLower(strings.TrimSpace(email)))
+	result, err := s.execContext(ctx, query, verificationCode, strings.ToLower(strings.TrimSpace(email)))
 	if err != nil {
 		return fmt.Errorf("update verification code: %w", err)
 	}
@@ -208,7 +208,7 @@ func (s *Store) UpdateVerificationCode(ctx context.Context, email, verificationC
 
 func (s *Store) VerifyUserEmail(ctx context.Context, email, verificationCode string) error {
 	query := `UPDATE users SET email_verified = 1, verification_code = '' WHERE email = ? AND verification_code = ?`
-	result, err := s.DB.ExecContext(ctx, query, strings.ToLower(strings.TrimSpace(email)), strings.TrimSpace(verificationCode))
+	result, err := s.execContext(ctx, query, strings.ToLower(strings.TrimSpace(email)), strings.TrimSpace(verificationCode))
 	if err != nil {
 		return fmt.Errorf("verify user email: %w", err)
 	}
@@ -226,7 +226,7 @@ func (s *Store) VerifyUserEmail(ctx context.Context, email, verificationCode str
 
 func (s *Store) SetPasswordResetCode(ctx context.Context, email, resetCode string, resetSentAt time.Time) error {
 	query := `UPDATE users SET password_reset_code = ?, password_reset_sent_at = ? WHERE email = ?`
-	result, err := s.DB.ExecContext(ctx, query, resetCode, resetSentAt, strings.ToLower(strings.TrimSpace(email)))
+	result, err := s.execContext(ctx, query, resetCode, resetSentAt, strings.ToLower(strings.TrimSpace(email)))
 	if err != nil {
 		return fmt.Errorf("set password reset code: %w", err)
 	}
@@ -246,7 +246,7 @@ func (s *Store) ResetPassword(ctx context.Context, email, resetCode, passwordHas
 	query := `UPDATE users
 		SET password_hash = ?, password_reset_code = '', password_reset_sent_at = NULL
 		WHERE email = ? AND password_reset_code = ? AND password_reset_sent_at IS NOT NULL AND password_reset_sent_at >= ?`
-	result, err := s.DB.ExecContext(ctx, query, passwordHash, strings.ToLower(strings.TrimSpace(email)), strings.TrimSpace(resetCode), now.Add(-expiryWindow))
+	result, err := s.execContext(ctx, query, passwordHash, strings.ToLower(strings.TrimSpace(email)), strings.TrimSpace(resetCode), now.Add(-expiryWindow))
 	if err != nil {
 		return fmt.Errorf("reset password: %w", err)
 	}

@@ -47,7 +47,7 @@ func (s *Store) CreateOrGetConversation(ctx context.Context, riderUserID, driver
 		UpdatedAt:       now,
 	}
 
-	_, err := s.DB.ExecContext(
+	_, err := s.execContext(
 		ctx,
 		`INSERT INTO chat_conversations (
 			id, rider_user_id, driver_user_id, ride_request_id, published_ride_id, trip_id, status, created_at, updated_at
@@ -71,7 +71,7 @@ func (s *Store) CreateOrGetConversation(ctx context.Context, riderUserID, driver
 
 func (s *Store) GetConversationByRequestAndParticipants(ctx context.Context, rideRequestID, riderUserID, driverUserID string) (*models.ChatConversation, error) {
 	var conversation models.ChatConversation
-	err := s.DB.QueryRowContext(
+	err := s.queryRowContext(
 		ctx,
 		`SELECT id, rider_user_id, driver_user_id, ride_request_id, published_ride_id, trip_id, status, created_at, updated_at
 		 FROM chat_conversations
@@ -102,7 +102,7 @@ func (s *Store) GetConversationByRequestAndParticipants(ctx context.Context, rid
 
 func (s *Store) GetConversationByIDForUser(ctx context.Context, conversationID, userID string) (*models.ChatConversation, error) {
 	var conversation models.ChatConversation
-	err := s.DB.QueryRowContext(
+	err := s.queryRowContext(
 		ctx,
 		`SELECT id, rider_user_id, driver_user_id, ride_request_id, published_ride_id, trip_id, status, created_at, updated_at
 		 FROM chat_conversations
@@ -131,7 +131,7 @@ func (s *Store) GetConversationByIDForUser(ctx context.Context, conversationID, 
 }
 
 func (s *Store) updateConversationLinks(ctx context.Context, conversationID, publishedRideID, tripID string) error {
-	_, err := s.DB.ExecContext(
+	_, err := s.execContext(
 		ctx,
 		`UPDATE chat_conversations
 		 SET published_ride_id = CASE WHEN ? != '' THEN ? ELSE published_ride_id END,
@@ -152,7 +152,7 @@ func (s *Store) updateConversationLinks(ctx context.Context, conversationID, pub
 }
 
 func (s *Store) ListChatSummariesByUser(ctx context.Context, userID string) ([]models.ChatConversationSummary, error) {
-	rows, err := s.DB.QueryContext(
+	rows, err := s.queryContext(
 		ctx,
 		`SELECT
 			c.id, c.rider_user_id, c.driver_user_id, c.ride_request_id, c.published_ride_id, c.trip_id, c.status, c.created_at, c.updated_at,
@@ -235,7 +235,7 @@ func (s *Store) ListChatSummariesByUser(ctx context.Context, userID string) ([]m
 }
 
 func (s *Store) ListChatMessagesByConversation(ctx context.Context, conversationID, userID string) ([]models.ChatMessage, error) {
-	rows, err := s.DB.QueryContext(
+	rows, err := s.queryContext(
 		ctx,
 		`SELECT cm.id, cm.conversation_id, cm.sender_user_id, cm.body, cm.message_type, cm.image_data, cm.location_label, cm.location_lat, cm.location_lon, cm.created_at
 		 FROM chat_messages cm
@@ -289,7 +289,7 @@ func (s *Store) CreateChatMessage(ctx context.Context, input models.ChatMessage)
 		message.MessageType = "text"
 	}
 
-	_, err = s.DB.ExecContext(
+	_, err = s.execContext(
 		ctx,
 		`INSERT INTO chat_messages (
 			id, conversation_id, sender_user_id, body, message_type, image_data, location_label, location_lat, location_lon, created_at
@@ -309,7 +309,7 @@ func (s *Store) CreateChatMessage(ctx context.Context, input models.ChatMessage)
 		return nil, fmt.Errorf("insert chat message: %w", err)
 	}
 
-	_, err = s.DB.ExecContext(
+	_, err = s.execContext(
 		ctx,
 		`UPDATE chat_conversations SET updated_at = ? WHERE id = ?`,
 		message.CreatedAt,

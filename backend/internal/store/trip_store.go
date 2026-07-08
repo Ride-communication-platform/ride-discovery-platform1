@@ -26,7 +26,7 @@ func (s *Store) CreateConfirmedTrip(ctx context.Context, rideRequestID, riderUse
 		id, ride_request_id, rider_user_id, driver_user_id, published_ride_id, status, created_at
 	) VALUES (?, ?, ?, ?, ?, ?, ?)`
 
-	_, err := s.DB.ExecContext(
+	_, err := s.execContext(
 		ctx,
 		query,
 		trip.ID, trip.RideRequestID, trip.RiderUserID, trip.DriverUserID, trip.PublishedRideID, trip.Status, trip.CreatedAt,
@@ -48,7 +48,7 @@ func (s *Store) GetTripByRideRequestID(ctx context.Context, rideRequestID string
 		WHERE ride_request_id = ?`
 
 	var trip models.Trip
-	err := s.DB.QueryRowContext(ctx, query, strings.TrimSpace(rideRequestID)).Scan(
+	err := s.queryRowContext(ctx, query, strings.TrimSpace(rideRequestID)).Scan(
 		&trip.ID,
 		&trip.RideRequestID,
 		&trip.RiderUserID,
@@ -72,7 +72,7 @@ func (s *Store) ListTripsByUser(ctx context.Context, userID string) ([]models.Tr
 		WHERE rider_user_id = ? OR driver_user_id = ?
 		ORDER BY created_at DESC`
 
-	rows, err := s.DB.QueryContext(ctx, query, strings.TrimSpace(userID), strings.TrimSpace(userID))
+	rows, err := s.queryContext(ctx, query, strings.TrimSpace(userID), strings.TrimSpace(userID))
 	if err != nil {
 		return nil, fmt.Errorf("list trips: %w", err)
 	}
@@ -115,7 +115,7 @@ func (s *Store) ListTripViewsByUser(ctx context.Context, userID string) ([]model
 	WHERE t.rider_user_id = ? OR t.driver_user_id = ?
 	ORDER BY t.created_at DESC`
 
-	rows, err := s.DB.QueryContext(ctx, query, strings.TrimSpace(userID), strings.TrimSpace(userID))
+	rows, err := s.queryContext(ctx, query, strings.TrimSpace(userID), strings.TrimSpace(userID))
 	if err != nil {
 		return nil, fmt.Errorf("list trip views: %w", err)
 	}
@@ -145,7 +145,7 @@ func (s *Store) ListTripViewsByUser(ctx context.Context, userID string) ([]model
 }
 
 func (s *Store) CancelTrip(ctx context.Context, tripID, userID string) (*models.Trip, error) {
-	result, err := s.DB.ExecContext(
+	result, err := s.execContext(
 		ctx,
 		`UPDATE trips SET status = 'cancelled' 
 		 WHERE id = ? AND (rider_user_id = ? OR driver_user_id = ?) AND status = 'confirmed'`,
@@ -165,7 +165,7 @@ func (s *Store) CancelTrip(ctx context.Context, tripID, userID string) (*models.
 	}
 
 	var trip models.Trip
-	err = s.DB.QueryRowContext(ctx, `SELECT id, ride_request_id, rider_user_id, driver_user_id, published_ride_id, status, created_at FROM trips WHERE id = ?`, strings.TrimSpace(tripID)).Scan(
+	err = s.queryRowContext(ctx, `SELECT id, ride_request_id, rider_user_id, driver_user_id, published_ride_id, status, created_at FROM trips WHERE id = ?`, strings.TrimSpace(tripID)).Scan(
 		&trip.ID,
 		&trip.RideRequestID,
 		&trip.RiderUserID,
@@ -179,4 +179,3 @@ func (s *Store) CancelTrip(ctx context.Context, tripID, userID string) (*models.
 	}
 	return &trip, nil
 }
-

@@ -4,7 +4,6 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"path/filepath"
 	"time"
 
 	"ridex/backend/internal/auth"
@@ -21,7 +20,10 @@ func main() {
 
 	port := getEnv("PORT", "8080")
 	jwtSecret := getEnv("JWT_SECRET", "ridex-dev-secret-change-me")
-	dbPath := getEnv("DB_PATH", filepath.Join("data", "ridex.db"))
+	databaseURL := os.Getenv("DATABASE_URL")
+	if databaseURL == "" {
+		log.Fatal("DATABASE_URL is required")
+	}
 	frontendOrigin := getEnv("FRONTEND_ORIGIN", "http://localhost:5173")
 	smtpHost := os.Getenv("SMTP_HOST")
 	smtpPort := getEnv("SMTP_PORT", "587")
@@ -35,7 +37,7 @@ func main() {
 	githubClientSecret := os.Getenv("GITHUB_CLIENT_SECRET")
 	githubRedirectURI := getEnv("GITHUB_REDIRECT_URI", "http://localhost:8080/api/auth/oauth/github/callback")
 
-	st, err := store.New(dbPath)
+	st, err := store.New(databaseURL)
 	if err != nil {
 		log.Fatalf("failed to initialize store: %v", err)
 	}
