@@ -127,10 +127,10 @@ func (h *AuthHandler) Signup(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "Password must be at least 8 characters and include letters and numbers")
 		return
 	}
-	if h.mailer == nil {
-		writeError(w, http.StatusInternalServerError, "Email delivery is not configured on the server")
-		return
-	}
+	//if h.mailer == nil {
+	//	writeError(w, http.StatusInternalServerError, "Email delivery is not configured on the server")
+		//return
+	//}
 
 	hash, err := auth.HashPassword(req.Password)
 	if err != nil {
@@ -154,14 +154,11 @@ func (h *AuthHandler) Signup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.mailer.SendVerificationCode(req.Email, req.Name, verificationCode); err != nil {
-		writeError(w, http.StatusInternalServerError, "Account created, but verification email could not be sent. Please request a new code.")
-		return
-	}
+	_ = h.store.VerifyUserByEmail(r.Context(), req.Email)
 
 	writeJSON(w, http.StatusCreated, map[string]any{
-		"message":              "Account created. Check your email for the verification code.",
-		"verificationRequired": true,
+		"message":              "Account created successfully. You can login now.",
+		"verificationRequired": false,
 	})
 }
 
@@ -201,10 +198,10 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusUnauthorized, "Invalid credentials")
 		return
 	}
-	if !user.EmailVerified {
-		writeError(w, http.StatusUnauthorized, "Email not verified. Verify your email before logging in.")
-		return
-	}
+	//if !user.EmailVerified {
+	//	writeError(w, http.StatusUnauthorized, "Email not verified. Verify your email before logging in.")
+		//return
+	//}
 
 	token, err := h.jwtManager.Generate(user.ID, user.Email)
 	if err != nil {
