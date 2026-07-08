@@ -4,6 +4,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"ridex/backend/internal/auth"
@@ -30,6 +31,15 @@ func main() {
 	smtpUser := os.Getenv("SMTP_USER")
 	smtpPass := os.Getenv("SMTP_PASS")
 	smtpFrom := os.Getenv("SMTP_FROM")
+	smtpHost := os.Getenv("SMTP_HOST")
+    smtpPort := getEnv("SMTP_PORT", "587")
+	smtpUser := os.Getenv("SMTP_USER")
+	smtpPass := os.Getenv("SMTP_PASS")
+	smtpFrom := os.Getenv("SMTP_FROM")
+
+	emailProvider := os.Getenv("EMAIL_PROVIDER")
+	resendAPIKey := os.Getenv("RESEND_API_KEY")
+	emailFrom := getEnv("EMAIL_FROM", "GenRide <onboarding@resend.dev>")
 	googleClientID := os.Getenv("GOOGLE_CLIENT_ID")
 	googleClientSecret := os.Getenv("GOOGLE_CLIENT_SECRET")
 	googleRedirectURI := getEnv("GOOGLE_REDIRECT_URI", "http://localhost:8080/api/auth/oauth/google/callback")
@@ -44,7 +54,13 @@ func main() {
 	defer st.DB.Close()
 
 	jwtManager := auth.NewJWTManager(jwtSecret, 24*time.Hour)
-	mailer := auth.NewSMTPMailer(smtpHost, smtpPort, smtpUser, smtpPass, smtpFrom)
+
+	var mailer auth.Mailer
+	if strings.EqualFold(emailProvider, "resend") {
+		mailer = auth.NewResendMailer(resendAPIKey, emailFrom)
+	} else {
+		mailer = auth.NewSMTPMailer(smtpHost, smtpPort, smtpUser, smtpPass, smtpFrom)
+	}
 	googleOAuth := &auth.GoogleOAuth{
 		ClientID:     googleClientID,
 		ClientSecret: googleClientSecret,
@@ -56,7 +72,7 @@ func main() {
 		RedirectURI:  githubRedirectURI,
 	}
 	if mailer == nil {
-		log.Printf("warning: SMTP email delivery is not configured; verification and password reset emails will fail until SMTP env vars are set")
+		log.Printf("warning: email delivery is not configured; verification and password reset emails will fail until email env vars are set")
 	}
 	if !googleOAuth.Enabled() {
 		log.Printf("warning: Google OAuth is not configured; Google sign-in will be unavailable until GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET are set")
