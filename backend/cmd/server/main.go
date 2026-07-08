@@ -26,11 +26,7 @@ func main() {
 		log.Fatal("DATABASE_URL is required")
 	}
 	frontendOrigin := getEnv("FRONTEND_ORIGIN", "http://localhost:5173")
-	smtpHost := os.Getenv("SMTP_HOST")
-	smtpPort := getEnv("SMTP_PORT", "587")
-	smtpUser := os.Getenv("SMTP_USER")
-	smtpPass := os.Getenv("SMTP_PASS")
-	smtpFrom := os.Getenv("SMTP_FROM")
+	
 	smtpHost := os.Getenv("SMTP_HOST")
     smtpPort := getEnv("SMTP_PORT", "587")
 	smtpUser := os.Getenv("SMTP_USER")
