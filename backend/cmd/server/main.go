@@ -36,8 +36,11 @@ func main() {
 	smtpFrom := os.Getenv("SMTP_FROM")
 
 	emailProvider := os.Getenv("EMAIL_PROVIDER")
-	resendAPIKey := os.Getenv("RESEND_API_KEY")
-	emailFrom := getEnv("EMAIL_FROM", "onboarding@resend.dev")
+	emailFrom := getEnv("EMAIL_FROM", "srinivaspenumarthi2244@gmail.com")
+
+	gmailClientID := os.Getenv("GMAIL_CLIENT_ID")
+	gmailClientSecret := os.Getenv("GMAIL_CLIENT_SECRET")
+	gmailRefreshToken := os.Getenv("GMAIL_REFRESH_TOKEN")
 
 	googleClientID := os.Getenv("GOOGLE_CLIENT_ID")
 	googleClientSecret := os.Getenv("GOOGLE_CLIENT_SECRET")
@@ -56,8 +59,13 @@ func main() {
 	jwtManager := auth.NewJWTManager(jwtSecret, 24*time.Hour)
 
 	var mailer auth.Mailer
-	if strings.EqualFold(emailProvider, "resend") {
-		mailer = auth.NewResendMailer(resendAPIKey, emailFrom)
+	if strings.EqualFold(emailProvider, "gmail_api") {
+		mailer = auth.NewGmailAPIMailer(
+			gmailClientID,
+			gmailClientSecret,
+			gmailRefreshToken,
+			emailFrom,
+		)
 	} else {
 		mailer = auth.NewSMTPMailer(smtpHost, smtpPort, smtpUser, smtpPass, smtpFrom)
 	}
@@ -152,5 +160,6 @@ func getEnv(key, fallback string) string {
 	if value := os.Getenv(key); value != "" {
 		return value
 	}
+
 	return fallback
 }
