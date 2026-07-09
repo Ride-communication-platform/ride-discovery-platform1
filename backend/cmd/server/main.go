@@ -21,24 +21,28 @@ func main() {
 
 	port := getEnv("PORT", "8080")
 	jwtSecret := getEnv("JWT_SECRET", "ridex-dev-secret-change-me")
+
 	databaseURL := os.Getenv("DATABASE_URL")
 	if databaseURL == "" {
 		log.Fatal("DATABASE_URL is required")
 	}
+
 	frontendOrigin := getEnv("FRONTEND_ORIGIN", "http://localhost:5173")
-	
+
 	smtpHost := os.Getenv("SMTP_HOST")
-    smtpPort := getEnv("SMTP_PORT", "587")
+	smtpPort := getEnv("SMTP_PORT", "587")
 	smtpUser := os.Getenv("SMTP_USER")
 	smtpPass := os.Getenv("SMTP_PASS")
 	smtpFrom := os.Getenv("SMTP_FROM")
 
 	emailProvider := os.Getenv("EMAIL_PROVIDER")
 	resendAPIKey := os.Getenv("RESEND_API_KEY")
-	emailFrom := getEnv("EMAIL_FROM", "GenRide <onboarding@resend.dev>")
+	emailFrom := getEnv("EMAIL_FROM", "onboarding@resend.dev")
+
 	googleClientID := os.Getenv("GOOGLE_CLIENT_ID")
 	googleClientSecret := os.Getenv("GOOGLE_CLIENT_SECRET")
 	googleRedirectURI := getEnv("GOOGLE_REDIRECT_URI", "http://localhost:8080/api/auth/oauth/google/callback")
+
 	githubClientID := os.Getenv("GITHUB_CLIENT_ID")
 	githubClientSecret := os.Getenv("GITHUB_CLIENT_SECRET")
 	githubRedirectURI := getEnv("GITHUB_REDIRECT_URI", "http://localhost:8080/api/auth/oauth/github/callback")
@@ -56,18 +60,20 @@ func main() {
 		mailer = auth.NewResendMailer(resendAPIKey, emailFrom)
 	} else {
 		mailer = auth.NewSMTPMailer(smtpHost, smtpPort, smtpUser, smtpPass, smtpFrom)
-
 	}
+
 	googleOAuth := &auth.GoogleOAuth{
 		ClientID:     googleClientID,
 		ClientSecret: googleClientSecret,
 		RedirectURI:  googleRedirectURI,
 	}
+
 	githubOAuth := &auth.GitHubOAuth{
 		ClientID:     githubClientID,
 		ClientSecret: githubClientSecret,
 		RedirectURI:  githubRedirectURI,
 	}
+
 	if mailer == nil {
 		log.Printf("warning: email delivery is not configured; verification and password reset emails will fail until email env vars are set")
 	}
@@ -77,9 +83,11 @@ func main() {
 	if !githubOAuth.Enabled() {
 		log.Printf("warning: GitHub OAuth is not configured; GitHub sign-in will be unavailable until GITHUB_CLIENT_ID and GITHUB_CLIENT_SECRET are set")
 	}
+
 	authHandler := handlers.NewAuthHandler(st, jwtManager, mailer, googleOAuth, githubOAuth, frontendOrigin)
 
 	mux := http.NewServeMux()
+
 	mux.HandleFunc("/api/auth/signup", authHandler.Signup)
 	mux.HandleFunc("/api/auth/login", authHandler.Login)
 	mux.HandleFunc("/api/auth/verify-email", authHandler.VerifyEmail)
@@ -90,17 +98,23 @@ func main() {
 	mux.HandleFunc("/api/auth/oauth/google/callback", authHandler.GoogleOAuthCallback)
 	mux.HandleFunc("/api/auth/oauth/github/start", authHandler.GitHubOAuthStart)
 	mux.HandleFunc("/api/auth/oauth/github/callback", authHandler.GitHubOAuthCallback)
+
 	mux.Handle("/api/auth/me", middleware.AuthMiddleware(jwtManager)(http.HandlerFunc(authHandler.Me)))
 	mux.Handle("/api/users/", middleware.AuthMiddleware(jwtManager)(http.HandlerFunc(authHandler.PublicProfile)))
+
 	mux.Handle("/api/ride-requests", middleware.AuthMiddleware(jwtManager)(http.HandlerFunc(authHandler.RideRequests)))
 	mux.Handle("/api/ride-requests/feed", middleware.AuthMiddleware(jwtManager)(http.HandlerFunc(authHandler.RideRequestFeed)))
+	mux.Handle("/api/ride-requests/", middleware.AuthMiddleware(jwtManager)(http.HandlerFunc(authHandler.RideRequestByID)))
+
 	mux.Handle("/api/published-rides/feed", middleware.AuthMiddleware(jwtManager)(http.HandlerFunc(authHandler.PublishedRideFeed)))
 	mux.Handle("/api/published-rides", middleware.AuthMiddleware(jwtManager)(http.HandlerFunc(authHandler.PublishedRides)))
 	mux.Handle("/api/published-rides/", middleware.AuthMiddleware(jwtManager)(http.HandlerFunc(authHandler.PublishedRideByID)))
-	mux.Handle("/api/ride-requests/", middleware.AuthMiddleware(jwtManager)(http.HandlerFunc(authHandler.RideRequestByID)))
+
 	mux.Handle("/api/trips", middleware.AuthMiddleware(jwtManager)(http.HandlerFunc(authHandler.Trips)))
 	mux.Handle("/api/trips/", middleware.AuthMiddleware(jwtManager)(http.HandlerFunc(authHandler.Trips)))
+
 	mux.Handle("/api/notifications", middleware.AuthMiddleware(jwtManager)(http.HandlerFunc(authHandler.Notifications)))
+
 	mux.Handle("/api/chats", middleware.AuthMiddleware(jwtManager)(http.HandlerFunc(authHandler.Chats)))
 	mux.Handle("/api/chats/", middleware.AuthMiddleware(jwtManager)(http.HandlerFunc(authHandler.Chats)))
 
@@ -112,7 +126,8 @@ func main() {
 		IdleTimeout:  30 * time.Second,
 	}
 
-	log.Printf("RideX auth server running on http://localhost:%s", port)
+	log.Printf("GenRide backend server running on port %s", port)
+
 	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		log.Fatalf("server error: %v", err)
 	}
