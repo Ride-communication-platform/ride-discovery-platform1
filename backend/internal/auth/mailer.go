@@ -1,13 +1,11 @@
 package auth
 
 import (
-	"bytes"
-	"encoding/json"
 	"fmt"
-	"net/http"
 	"net/smtp"
 	"strings"
-	"time"
+
+	"github.com/resend/resend-go/v3"
 )
 
 type Mailer interface {
@@ -74,9 +72,8 @@ func (m *SMTPMailer) send(toEmail, subject, body string) error {
 }
 
 type ResendMailer struct {
-	apiKey string
+	client *resend.Client
 	from   string
-	client *http.Client
 }
 
 func NewResendMailer(apiKey, from string) Mailer {
@@ -88,74 +85,49 @@ func NewResendMailer(apiKey, from string) Mailer {
 	}
 
 	return &ResendMailer{
-		apiKey: apiKey,
+		client: resend.NewClient(apiKey),
 		from:   from,
-		client: &http.Client{Timeout: 10 * time.Second},
 	}
 }
 
 func (m *ResendMailer) SendVerificationCode(toEmail, toName, code string) error {
 	subject := "GenRide email verification"
-	text := fmt.Sprintf(
-		"Hi %s,\n\nYour GenRide verification code is: %s\n\nEnter this code in the app to verify your email.\n",
-		safeDisplayName(toName),
-		code,
-	)
-	html := fmt.Sprintf(
-		`<p>Hi %s,</p><p>Your GenRide verification code is:</p><h2>%s</h2><p>Enter this code in the app to verify your email.</p>`,
-		escapeHTML(safeDisplayName(toName)),
-		escapeHTML(code),
-	)
 
-	return m.send(toEmail, subject, text, html)
+	html := fmt.Sprintf(`
+		<p>Hi %s,</p>
+		<p>Your GenRide verification code is:</p>
+		<h2 style="letter-spacing: 2px;">%s</h2>
+		<p>Enter this code in the app to verify your email.</p>
+	`, escapeHTML(safeDisplayName(toName)), escapeHTML(code))
+
+	return m.send(toEmail, subject, html)
 }
 
 func (m *ResendMailer) SendPasswordResetCode(toEmail, toName, code string) error {
 	subject := "GenRide password reset"
-	text := fmt.Sprintf(
-		"Hi %s,\n\nYour GenRide password reset code is: %s\n\nEnter this code in the app to reset your password. If you did not request this, ignore this email.\n",
-		safeDisplayName(toName),
-		code,
-	)
-	html := fmt.Sprintf(
-		`<p>Hi %s,</p><p>Your GenRide password reset code is:</p><h2>%s</h2><p>Enter this code in the app to reset your password.</p><p>If you did not request this, ignore this email.</p>`,
-		escapeHTML(safeDisplayName(toName)),
-		escapeHTML(code),
-	)
 
-	return m.send(toEmail, subject, text, html)
+	html := fmt.Sprintf(`
+		<p>Hi %s,</p>
+		<p>Your GenRide password reset code is:</p>
+		<h2 style="letter-spacing: 2px;">%s</h2>
+		<p>Enter this code in the app to reset your password.</p>
+		<p>If you did not request this, ignore this email.</p>
+	`, escapeHTML(safeDisplayName(toName)), escapeHTML(code))
+
+	return m.send(toEmail, subject, html)
 }
 
-func (m *ResendMailer) send(toEmail, subject, text, html string) error {
-	payload := map[string]any{
-		"from":    m.from,
-		"to":      []string{toEmail},
-		"subject": subject,
-		"text":    text,
-		"html":    html,
+func (m *ResendMailer) send(toEmail, subject, html string) error {
+	params := &resend.SendEmailRequest{
+		From:    m.from,
+		To:      []string{toEmail},
+		Subject: subject,
+		Html:    html,
 	}
 
-	body, err := json.Marshal(payload)
-	if err != nil {
-		return fmt.Errorf("marshal resend email: %w", err)
-	}
-
-	req, err := http.NewRequest(http.MethodPost, "https://api.resend.com/emails", bytes.NewReader(body))
-	if err != nil {
-		return fmt.Errorf("create resend request: %w", err)
-	}
-
-	req.Header.Set("Authorization", "Bearer "+m.apiKey)
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := m.client.Do(req)
+	_, err := m.client.Emails.Send(params)
 	if err != nil {
 		return fmt.Errorf("send resend email: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return fmt.Errorf("resend email failed with status %s", resp.Status)
 	}
 
 	return nil
