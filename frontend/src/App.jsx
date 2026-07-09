@@ -1570,7 +1570,7 @@ function App() {
   }
 
   if (user) {
-    const profileName = profileForm.name || user.name || 'RideX member'
+    const profileName = profileForm.name || user.name || 'GenRide member'
     const hasRating = user.ratingCount > 0
     const cropBaseScale = getCoverScale(avatarDraftNatural.width, avatarDraftNatural.height, AVATAR_CROP_SIZE)
     const cropDisplayWidth = avatarDraftNatural.width * cropBaseScale * avatarDraftZoom
@@ -1583,7 +1583,7 @@ function App() {
             href="/"
             className="profile-brand profile-brand-home"
             onClick={goToHomeFromBrand}
-            aria-label="RideX home"
+            aria-label="GenRide home"
           >
             <div className="profile-brand-mark">
               <RideMarkIcon />
@@ -2341,7 +2341,7 @@ function App() {
                         onClick={() => setActiveChatId(conversation.id)}
                       >
                         <div className="chat-list-top">
-                          <strong>{conversation.otherUserName || 'RideX user'}</strong>
+                          <strong>{conversation.otherUserName || 'GenRide user'}</strong>
                           <span>{formatChatTimestamp(conversation.lastMessageAt || conversation.updatedAt)}</span>
                         </div>
                         <div className="chat-list-route">{conversation.fromLabel || 'Route pending'} → {conversation.toLabel || 'Route pending'}</div>
@@ -2357,7 +2357,7 @@ function App() {
                   <>
                     <div className="chat-panel-header">
                       <div>
-                        <h3>{activeChat.otherUserName || 'RideX user'}</h3>
+                        <h3>{activeChat.otherUserName || 'GenRide user'}</h3>
                         <p>{activeChat.fromLabel} → {activeChat.toLabel} • {activeChat.rideDate} {activeChat.rideTime ? `at ${activeChat.rideTime}` : ''}</p>
                       </div>
                       <span className="chat-status-pill">{activeChat.tripStatus || activeChat.status}</span>
@@ -3242,7 +3242,7 @@ function App() {
                 <>
                   <div className="rider-profile-header">
                     <div className="rider-profile-avatar" style={requesterProfile.avatarData ? { backgroundImage: `url(${requesterProfile.avatarData})` } : undefined}>
-                      {!requesterProfile.avatarData && <span>{getInitials(requesterProfile.name || 'RideX')}</span>}
+                      {!requesterProfile.avatarData && <span>{getInitials(requesterProfile.name || 'GenRide')}</span>}
                     </div>
                     <div className="rider-profile-copy">
                       <h3>{requesterProfile.name}</h3>
@@ -3287,14 +3287,14 @@ function App() {
             href="/"
             className="auth-brand auth-brand-home"
             onClick={goToHomeFromBrand}
-            aria-label="RideX home"
+            aria-label="GenRide home"
           >
             <div className="auth-brand-mark">
               <RideMarkIcon />
             </div>
             <span className="logo">
-              <span className="logo-dark">Ride</span>
-              <span className="logo-accent">X</span>
+              <span className="logo-dark">Gen</span>
+              <span className="logo-accent">Ride</span>
             </span>
           </a>
           <h2 className="hero-heading">
@@ -3303,12 +3303,12 @@ function App() {
           <p className="hero-copy">
             Post available seats or book your next trip with live pricing, verified profiles, and fast confirmation.
           </p>
-          <ul className="trust-list" aria-label="RideX trust signals">
+          <ul className="trust-list" aria-label="GenRide trust signals">
             <li>Verified identity checks before every match</li>
             <li>Protected payments and secure in-app pricing</li>
             <li>Real-time route pricing with live updates</li>
           </ul>
-          <div className="trust-stats" aria-label="RideX platform stats">
+          <div className="trust-stats" aria-label="GenRide platform stats">
             <div className="trust-stat">
               <strong>120K+</strong>
               <span>members</span>
@@ -3334,7 +3334,7 @@ function App() {
             <div className="hero-flow-chip chip-bottom">Live pricing</div>
           </div>
           <blockquote className="testimonial-card">
-            “RideX feels safer than a classifieds listing and faster than traditional carpool planning.”
+            “GenRide feels safer than a classifieds listing and faster than traditional carpool planning.”
             <span>Priya M., weekly commuter</span>
           </blockquote>
         </div>
@@ -3364,7 +3364,7 @@ function App() {
           <form className="form-panel" onSubmit={handleSubmit}>
             <div className={`form-content ${activeTab === 'signup' ? 'slide-left' : ''}`}>
               <h3 className="form-title">{activeTab === 'login' ? 'Welcome back' : 'Create your account'}</h3>
-              <p className="form-subtitle">{activeTab === 'login' ? 'Login to continue to RideX.' : 'Start with your personal account details.'}</p>
+              <p className="form-subtitle">{activeTab === 'login' ? 'Login to continue to GenRide.' : 'Start with your personal account details.'}</p>
 
               {banner && <p className="form-banner">{banner}</p>}
               {errors.form && <p className="form-error">{errors.form}</p>}
