@@ -56,6 +56,7 @@ func main() {
 		mailer = auth.NewResendMailer(resendAPIKey, emailFrom)
 	} else {
 		mailer = auth.NewSMTPMailer(smtpHost, smtpPort, smtpUser, smtpPass, smtpFrom)
+
 	}
 	googleOAuth := &auth.GoogleOAuth{
 		ClientID:     googleClientID,
