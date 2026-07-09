@@ -7,6 +7,7 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/jackc/pgx/v5 v5.10.0
 	github.com/jmoiron/sqlx v1.4.0
+	github.com/resend/resend-go/v3 v3.9.2
 	golang.org/x/crypto v0.32.0
 )
 
